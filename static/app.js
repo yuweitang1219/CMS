@@ -383,7 +383,17 @@ function renderMiniCalendar() {
     for (let i = firstDay - 1; i >= 0; i--) {
         const dayDiv = document.createElement("div");
         dayDiv.className = "mini-day prev-month";
-        dayDiv.textContent = prevTotalDays - i;
+        
+        const thisDate = new Date(year, month - 1, prevTotalDays - i);
+        const dayOfWeek = thisDate.getDay();
+        if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
+        if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
+        
+        const dayNumSpan = document.createElement("span");
+        dayNumSpan.className = "day-number";
+        dayNumSpan.textContent = prevTotalDays - i;
+        dayDiv.appendChild(dayNumSpan);
+        
         container.appendChild(dayDiv);
     }
     
@@ -392,9 +402,16 @@ function renderMiniCalendar() {
     for (let d = 1; d <= totalDays; d++) {
         const dayDiv = document.createElement("div");
         dayDiv.className = "mini-day";
-        dayDiv.textContent = d;
         
         const thisDate = new Date(year, month, d);
+        const dayOfWeek = thisDate.getDay();
+        
+        // Highlight weekends
+        if (dayOfWeek === 6) {
+            dayDiv.classList.add("weekend-sat");
+        } else if (dayOfWeek === 0) {
+            dayDiv.classList.add("weekend-sun");
+        }
         
         // Highlight today
         if (thisDate.toDateString() === today.toDateString()) {
@@ -406,12 +423,38 @@ function renderMiniCalendar() {
             dayDiv.classList.add("selected");
         }
         
-        // Has events dot indicator
-        if (hasEventsOnDay(thisDate)) {
-            dayDiv.classList.add("has-events");
-        }
+        // Day number header
+        const dayNumSpan = document.createElement("span");
+        dayNumSpan.className = "day-number";
+        dayNumSpan.textContent = d;
+        dayDiv.appendChild(dayNumSpan);
         
-        dayDiv.onclick = () => {
+        // Render events directly inside the day cell
+        const eventsContainer = document.createElement("div");
+        eventsContainer.className = "day-events-container";
+        
+        const dayEvents = getEventsOnDay(thisDate);
+        dayEvents.forEach(event => {
+            const eventDiv = document.createElement("div");
+            eventDiv.className = "day-event-item";
+            
+            // Format start time
+            let timeStr = "全天";
+            if (event.start.dateTime) {
+                const eventTime = new Date(event.start.dateTime);
+                const hrs = String(eventTime.getHours()).padStart(2, '0');
+                const mins = String(eventTime.getMinutes()).padStart(2, '0');
+                timeStr = `${hrs}:${mins}`;
+            }
+            eventDiv.textContent = `${timeStr} ${event.summary}`;
+            eventDiv.title = `${timeStr} ${event.summary}${event.description ? '\n' + event.description : ''}`;
+            
+            eventsContainer.appendChild(eventDiv);
+        });
+        
+        dayDiv.appendChild(eventsContainer);
+        
+        dayDiv.onclick = (e) => {
             state.selectedDate = thisDate;
             renderMiniCalendar();
             renderEvents();
@@ -426,7 +469,17 @@ function renderMiniCalendar() {
     for (let i = 1; i <= nextPad; i++) {
         const dayDiv = document.createElement("div");
         dayDiv.className = "mini-day next-month";
-        dayDiv.textContent = i;
+        
+        const thisDate = new Date(year, month + 1, i);
+        const dayOfWeek = thisDate.getDay();
+        if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
+        if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
+        
+        const dayNumSpan = document.createElement("span");
+        dayNumSpan.className = "day-number";
+        dayNumSpan.textContent = i;
+        dayDiv.appendChild(dayNumSpan);
+        
         container.appendChild(dayDiv);
     }
 }
@@ -438,6 +491,14 @@ function changeMonth(direction) {
 
 function hasEventsOnDay(date) {
     return state.events.some(event => {
+        const start = event.start.dateTime || event.start.date;
+        const eventDate = new Date(start);
+        return eventDate.toDateString() === date.toDateString();
+    });
+}
+
+function getEventsOnDay(date) {
+    return state.events.filter(event => {
         const start = event.start.dateTime || event.start.date;
         const eventDate = new Date(start);
         return eventDate.toDateString() === date.toDateString();

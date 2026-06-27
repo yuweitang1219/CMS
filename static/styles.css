@@ -849,52 +849,105 @@ input:focus, select:focus, textarea:focus {
 }
 
 .mini-day {
-    aspect-ratio: 1.6;
+    position: relative;
+    min-height: 95px;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 6px;
     font-size: 0.8rem;
     font-weight: 600;
     border-radius: 8px;
     cursor: pointer;
     color: var(--text-secondary);
     transition: var(--transition-smooth);
-    border: 1px solid transparent;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.015);
+    box-sizing: border-box;
 }
 .mini-day:hover {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 .mini-day.prev-month,
 .mini-day.next-month {
     color: rgba(255, 255, 255, 0.15);
-    pointer-events: none;
+    opacity: 0.5;
 }
 
 .mini-day.today {
     border-color: var(--accent-purple);
-    color: var(--accent-purple);
+    box-shadow: 0 0 8px rgba(157, 78, 221, 0.15);
 }
 
 .mini-day.selected {
-    background: var(--grad-primary);
-    color: white;
-    font-weight: 700;
-    box-shadow: 0 4px 10px rgba(157, 78, 221, 0.3);
+    border-color: var(--accent-cyan);
+    background: rgba(157, 78, 221, 0.08);
 }
 
-.mini-day.has-events::after {
-    content: '';
-    position: absolute;
-    bottom: 3px;
-    width: 4px;
-    height: 4px;
-    background: var(--accent-cyan);
-    border-radius: 50%;
+/* Weekend Styling */
+.mini-day.weekend-sat {
+    background: rgba(129, 140, 248, 0.03);
+    border-color: rgba(129, 140, 248, 0.08);
 }
-.mini-day {
-    position: relative;
+.mini-day.weekend-sat .day-number {
+    color: #818cf8;
+}
+.mini-day.weekend-sun {
+    background: rgba(248, 113, 113, 0.03);
+    border-color: rgba(248, 113, 113, 0.08);
+}
+.mini-day.weekend-sun .day-number {
+    color: #f87171;
+}
+
+/* Calendar Weekdays Mappings */
+.mini-calendar-weekdays div:first-child {
+    color: #f87171;
+}
+.mini-calendar-weekdays div:last-child {
+    color: #818cf8;
+}
+
+/* Internal Day Elements */
+.day-number {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: inline-block;
+}
+
+.day-events-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow-y: auto;
+    max-height: 65px;
+}
+
+.day-event-item {
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 2px 5px;
+    background: rgba(157, 78, 221, 0.15);
+    border-left: 2.5px solid var(--accent-purple);
+    color: #e0aaff;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.day-event-item:hover {
+    background: rgba(157, 78, 221, 0.25);
+    color: white;
 }
 
 /* Timeline & Event List */
