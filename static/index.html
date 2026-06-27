@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人智能生活儀表板 - 行事曆 & 待辦事項</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    
+    <!-- Background Glowing Orbs -->
+    <div class="orb-container">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- 1. LOGIN / REGISTER VIEW -->
+    <div id="login-view" class="auth-container hidden">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo">
+                    <i class="fa-solid fa-clock-rotate-left logo-icon"></i>
+                    <span>Antigravity Dashboard</span>
+                </div>
+                <h2 id="auth-title">登入儀表板</h2>
+                <p id="auth-subtitle">請輸入您的帳號密碼以存取您的個人儀表板</p>
+            </div>
+            
+            <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+                <div class="input-group">
+                    <label for="username"><i class="fa-solid fa-user"></i> 使用者名稱</label>
+                    <input type="text" id="username" required placeholder="請輸入帳號" autocomplete="username">
+                </div>
+                
+                <div class="input-group">
+                    <label for="password"><i class="fa-solid fa-lock"></i> 密碼</label>
+                    <input type="password" id="password" required placeholder="請輸入密碼" autocomplete="current-password">
+                </div>
+                
+                <div id="auth-error" class="error-msg hidden"></div>
+                
+                <button type="submit" id="auth-submit-btn" class="btn btn-primary btn-block">
+                    <span>登入</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. MAIN DASHBOARD VIEW -->
+    <div id="dashboard-view" class="dashboard-container hidden">
+        
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i class="fa-solid fa-compass logo-icon pulse"></i>
+                    <span>Antigravity</span>
+                </div>
+                <div class="status-badges">
+                    <div id="status-google" class="status-badge disconnected" onclick="openSettingsModal()">
+                        <i class="fa-brands fa-google"></i>
+                        <span>Google 日曆未連線</span>
+                    </div>
+                    <div id="status-line" class="status-badge disconnected" onclick="openSettingsModal()">
+                        <i class="fa-brands fa-line"></i>
+                        <span>Line 遠端未啟動</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Real-time Clock -->
+            <div class="header-center">
+                <div class="clock-display">
+                    <div id="clock-time">00:00:00</div>
+                    <div id="clock-date">2026年06月26日 星期五</div>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="user-profile">
+                    <i class="fa-solid fa-circle-user avatar"></i>
+                    <span id="user-display-name">使用者</span>
+                    <button class="btn-icon btn-logout" onclick="handleLogout()" title="登出">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </button>
+                </div>
+                <button class="btn btn-settings" onclick="openSettingsModal()">
+                    <i class="fa-solid fa-sliders"></i> <span>設定</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace Grid -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: To-Do Manager -->
+            <section class="grid-card todo-card">
+                <div class="card-header">
+                    <div class="header-title">
+                        <i class="fa-solid fa-list-check icon-accent-todo"></i>
+                        <h2>待辦事項</h2>
+                    </div>
+                    <div class="todo-progress-container">
+                        <div class="progress-ring-box">
+                            <svg class="progress-ring" width="46" height="46">
+                                <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
+                                <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
+                                <defs>
+                                    <linearGradient id="todo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#ff8c00" />
+                                        <stop offset="100%" stop-color="#ff007f" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            <span id="todo-progress-percentage" class="progress-text">0%</span>
+                        </div>
+                        <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                    </div>
+                </div>
+
+                <!-- Add Todo Form -->
+                <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
+                    <div class="todo-input-row">
+                        <input type="text" id="todo-input-title" placeholder="新增一個待辦事項..." required autocomplete="off">
+                        
+                        <div class="todo-input-meta">
+                            <select id="todo-input-priority" class="priority-select">
+                                <option value="low">低優先權</option>
+                                <option value="medium" selected>中優先權</option>
+                                <option value="high">高優先權</option>
+                            </select>
+                            
+                            <input type="date" id="todo-input-date" class="date-select">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-todo-add">
+                        <i class="fa-solid fa-plus"></i> 新增任務
+                    </button>
+                </form>
+
+                <!-- Filters -->
+                <div class="todo-filters">
+                    <button id="filter-all" class="filter-btn active" onclick="setTodoFilter('all')">全部</button>
+                    <button id="filter-active" class="filter-btn" onclick="setTodoFilter('active')">進行中</button>
+                    <button id="filter-completed" class="filter-btn" onclick="setTodoFilter('completed')">已完成</button>
+                </div>
+
+                <!-- Todo Scroll List -->
+                <div class="todo-list-container">
+                    <div id="todo-list-empty" class="empty-state hidden">
+                        <i class="fa-solid fa-clipboard-check empty-icon"></i>
+                        <p>太棒了！目前沒有待辦事項</p>
+                    </div>
+                    <ul id="todo-list" class="todo-list">
+                        <!-- Dynamic items -->
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Right Side: Google Calendar Sync -->
+            <section class="grid-card calendar-card">
+                <div class="card-header">
+                    <div class="header-title">
+                        <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
+                        <h2>我的日程表</h2>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                        <button class="btn btn-primary" onclick="openAddEventModal()">
+                            <i class="fa-solid fa-plus"></i> <span>安排行程</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Content -->
+                <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
+                    <div class="disconnected-content">
+                        <div class="icon-glow">
+                            <i class="fa-brands fa-google"></i>
+                        </div>
+                        <h3>串接 Google 日曆</h3>
+                        <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
+                        <button class="btn btn-primary" onclick="openSettingsModal()">
+                            <i class="fa-solid fa-link"></i> 前往設定進行授權
+                        </button>
+                    </div>
+                </div>
+
+                <div id="calendar-connected-state" class="calendar-inner-grid">
+                    <!-- Mini Month Calendar -->
+                    <div class="mini-calendar-container">
+                        <div class="mini-calendar-header">
+                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                            <h3 id="mini-calendar-month-year">2026年6月</h3>
+                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="mini-calendar-weekdays">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="mini-calendar-days" class="mini-calendar-days">
+                            <!-- Dynamic days -->
+                        </div>
+                    </div>
+
+                    <!-- Upcoming Events List -->
+                    <div class="events-timeline">
+                        <h3>接下來的行程</h3>
+                        <div id="events-list-empty" class="empty-state hidden">
+                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
+                            <p>此日期沒有安排任何行程</p>
+                        </div>
+                        <div id="events-list" class="events-list">
+                            <!-- Dynamic events -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 3. SETTINGS MODAL -->
+    <div id="settings-modal" class="modal-overlay hidden" onclick="closeSettingsModalOnOverlay(event)">
+        <div class="modal-card settings-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>系統設定與串接</h2>
+                <button class="btn-close" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body settings-body">
+                
+                <!-- Access Info Card -->
+                <div class="settings-section info-section">
+                    <h3><i class="fa-solid fa-tower-cell"></i> 多裝置連線資訊</h3>
+                    <p>您的個人伺服器目前正在區域網路中運行。您可以使用其他裝置（手機/平板）連結至此儀表板：</p>
+                    <div class="connection-url-box">
+                        <span class="url-label">區域網路網址：</span>
+                        <code id="local-ip-address">http://正在獲取...:8000</code>
+                    </div>
+                </div>
+
+                <!-- Google Calendar Section -->
+                <div class="settings-section">
+                    <h3><i class="fa-brands fa-google"></i> Google 日曆 API 串接</h3>
+                    
+                    <div id="google-status-connected" class="api-status-card connected hidden">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">已成功連結至 Google 帳戶</span>
+                            <span id="google-user-email" class="status-desc">user@gmail.com</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="disconnectGoogle()">解除授權</button>
+                    </div>
+
+                    <div id="google-status-disconnected" class="api-status-card disconnected">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Google 帳戶未授權</span>
+                            <span class="status-desc">請填寫下方 OAuth 資訊以進行連線</span>
+                        </div>
+                    </div>
+
+                    <form id="google-settings-form" onsubmit="handleSaveGoogleSettings(event)" class="settings-form">
+                        <div class="input-group">
+                            <label for="google-client-id">Google Client ID</label>
+                            <input type="password" id="google-client-id" placeholder="輸入 Google 專案的 Client ID" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="google-client-secret">Google Client Secret</label>
+                            <input type="password" id="google-client-secret" placeholder="輸入 Google 專案的 Client Secret" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="google-calendar-id">Google Calendar ID (選填，預設為主要日曆)</label>
+                            <input type="text" id="google-calendar-id" placeholder="留空預設為 primary；特定日曆請輸入 xxxx@group.calendar.google.com" autocomplete="off">
+                        </div>
+                        <div class="settings-action-row">
+                            <a href="https://console.cloud.google.com/" target="_blank" class="link-btn"><i class="fa-solid fa-up-right-from-square"></i> 開啟 Google Cloud Console</a>
+                            <button type="submit" class="btn btn-primary">儲存並進行 Google 授權</button>
+                        </div>
+                    </form>
+                    
+                    <div class="setup-guide">
+                        <h4>💡 Google API 設定步驟：</h4>
+                        <ol>
+                            <li>進入 Google Cloud Console 建立新專案。</li>
+                            <li>啟用 <strong>Google Calendar API</strong>。</li>
+                            <li>在「OAuth 同意畫面」設定為外部，並加入您的 Google 測試帳號。</li>
+                            <li>建立「OAuth 2.0 用戶端 ID」，應用程式類型選擇「網頁應用程式」。</li>
+                            <li>在<strong>已授權的重新導向 URI</strong> 中新增：
+                                <code id="google-redirect-uri-display">http://localhost:8000/oauth2callback</code>
+                            </li>
+                            <li>複製 Client ID 與 Client Secret，填入上方並點選儲存。</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <hr class="settings-divider">
+
+                <!-- Line Bot Section -->
+                <div class="settings-section">
+                    <h3><i class="fa-brands fa-line"></i> Line Bot 遠端新增待辦事項</h3>
+                    
+                    <div id="line-status-connected" class="api-status-card connected hidden">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Line Webhook 機制已啟用</span>
+                            <span class="status-desc">現在可以透過您的 Line Bot 傳送訊息了！</span>
+                        </div>
+                    </div>
+
+                    <div id="line-status-disconnected" class="api-status-card disconnected">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Line Webhook 未啟用</span>
+                            <span class="status-desc">請填寫下方 Line Developers 憑證</span>
+                        </div>
+                    </div>
+
+                    <form id="line-settings-form" onsubmit="handleSaveLineSettings(event)" class="settings-form">
+                        <div class="input-group">
+                            <label>Line Webhook 網址 (請複製到 Line Console)</label>
+                            <div class="copy-input-row">
+                                <input type="text" id="line-webhook-url" readonly value="http://localhost:8000/api/line/webhook">
+                                <button type="button" class="btn btn-secondary" onclick="copyWebhookUrl()"><i class="fa-solid fa-copy"></i> 複製</button>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="line-channel-token">Channel Access Token</label>
+                            <input type="password" id="line-channel-token" placeholder="輸入 Line Messaging API 的 Channel Access Token" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="line-channel-secret">Channel Secret</label>
+                            <input type="password" id="line-channel-secret" placeholder="輸入 Line Channel Secret" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="line-user-id">您的 LINE User ID (高度安全性限制)</label>
+                            <input type="password" id="line-user-id" placeholder="輸入您的個人 LINE User ID，以防他人隨意新增待辦事項" required autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="gemini-api-key">Gemini API Key (長照 AI 計畫書對話所需)</label>
+                            <input type="password" id="gemini-api-key" placeholder="輸入您的 Google AI Studio Gemini API Key" autocomplete="off">
+                        </div>
+                        <button type="submit" class="btn btn-primary">儲存 Line 設定</button>
+                    </form>
+                    
+                    <div class="setup-guide">
+                        <h4>💡 Line Bot 設定步驟：</h4>
+                        <ol>
+                            <li>登入 <a href="https://developers.line.biz/" target="_blank">Line Developers</a> 建立一個 Provider。</li>
+                            <li>建立一個 <strong>Messaging API</strong> Channel。</li>
+                            <li>在 Channel 設定中取得 <strong>Channel Secret</strong>。</li>
+                            <li>在 Messaging API 頁籤最下方發行並取得 <strong>Channel Access Token</strong>。</li>
+                            <li>將上方的 Webhook 網址複製，並貼到 Line Console 的 <strong>Webhook URL</strong>，並開啟 <strong>Use webhook</strong> 功能。</li>
+                            <li>在 Line Developers 帳號設定頁面中找到您的 <strong>Your user ID</strong> 並填入上方（這能確保只有您能呼叫此機器人）。</li>
+                            <li>儲存後，用手機掃描 Line Messaging API 的 QR Code 加入好友，即可透過對話傳送任務！</li>
+                        </ol>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. ADD CALENDAR EVENT MODAL -->
+    <div id="add-event-modal" class="modal-overlay hidden" onclick="closeAddEventModalOnOverlay(event)">
+        <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>安排新行程</h2>
+                <button class="btn-close" onclick="closeAddEventModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="event-form" onsubmit="handleCreateEvent(event)">
+                <div class="modal-body">
+                    <div class="input-group">
+                        <label for="event-summary"><i class="fa-solid fa-heading"></i> 行程名稱</label>
+                        <input type="text" id="event-summary" required placeholder="例如：與客戶召開會議" autocomplete="off">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="event-description"><i class="fa-solid fa-align-left"></i> 詳細內容 / 備註</label>
+                        <textarea id="event-description" placeholder="例如：討論專案進度與預算規劃..." rows="3"></textarea>
+                    </div>
+                    
+                    <div class="modal-form-row">
+                        <div class="input-group">
+                            <label for="event-start"><i class="fa-solid fa-clock"></i> 開始時間</label>
+                            <input type="datetime-local" id="event-start" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="event-end"><i class="fa-solid fa-clock"></i> 結束時間</label>
+                            <input type="datetime-local" id="event-end" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddEventModal()">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calendar-check"></i> 建立行程</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast-container hidden">
+        <span id="toast-message">提示訊息</span>
+    </div>
+
+    <!-- Main JS logic -->
+    <script src="/app.js?v=1.1"></script>
+</body>
+</html>
