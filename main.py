@@ -38,6 +38,15 @@ logger = logging.getLogger("app")
 
 app = FastAPI(title="Google Calendar & To-Do Dashboard")
 
+# Auto-populate admin user from environment variables if not present in DB
+admin_user = os.environ.get("ADMIN_USERNAME", "yuwei1112")
+admin_pass = os.environ.get("ADMIN_PASSWORD")
+if admin_pass and not database.has_users():
+    import auth
+    hashed_pwd = auth.get_password_hash(admin_pass)
+    database.create_user(admin_user, hashed_pwd)
+    logger.info(f"Auto-populated admin user '{admin_user}' from environment variables.")
+
 # Enable CORS for development
 app.add_middleware(
     CORSMiddleware,
@@ -167,6 +176,37 @@ def get_valid_google_token() -> Optional[str]:
     except Exception as e:
         logger.error(f"Network error refreshing Google token: {e}")
         return None
+
+def get_calendar_service_from_env():
+    import os
+    import json
+    from google.oauth2 import service_account
+    from googleapiclient.discovery import build
+    
+    # Try Service Account JSON from env (or database fallback)
+    service_account_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if not service_account_json:
+        service_account_json = database.get_setting("google_service_account_json")
+        
+    if not service_account_json:
+        return None, None
+        
+    try:
+        service_account_info = json.loads(service_account_json)
+        SCOPES = ['https://www.googleapis.com/auth/calendar']
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info, scopes=SCOPES
+        )
+        service = build('calendar', 'v3', credentials=credentials)
+        
+        calendar_id = os.environ.get("GOOGLE_CALENDAR_ID")
+        if not calendar_id:
+            calendar_id = database.get_setting("google_calendar_id", "primary")
+            
+        return service, calendar_id
+    except Exception as e:
+        logger.error(f"Error building Service Account calendar service: {e}")
+        return None, None
 
 # --- AUTH API ENDPOINTS ---
 
@@ -430,11 +470,28 @@ def oauth2callback(code: str, request: Request):
 
 @app.get("/api/calendar/events")
 def list_calendar_events(current_user: str = Depends(get_current_user)):
+    # 1. Try Service Account first (stateless env mode)
+    service, calendar_id = get_calendar_service_from_env()
+    if service:
+        try:
+            time_min = datetime.utcnow().isoformat() + "Z"
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                singleEvents=True,
+                orderBy='startTime',
+                maxResults=50
+            ).execute()
+            return events_result
+        except Exception as e:
+            logger.error(f"Error listing events via Service Account: {e}")
+            return {"error": "google_api_error", "details": str(e), "events": []}
+
+    # 2. Fallback to Google OAuth
     token = get_valid_google_token()
     if not token:
         return {"error": "not_authorized", "events": []}
         
-    # Get current time as ISO 8601 string
     time_min = datetime.utcnow().isoformat() + "Z"
     calendar_id = database.get_setting("google_calendar_id", "primary")
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
@@ -461,16 +518,6 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
 
 @app.post("/api/calendar/events")
 def create_calendar_event(event: CalendarEventCreate, current_user: str = Depends(get_current_user)):
-    token = get_valid_google_token()
-    if not token:
-        raise HTTPException(status_code=400, detail="Google Calendar is not authorized.")
-    calendar_id = database.get_setting("google_calendar_id", "primary")
-    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
     # Robustly handle datetime-local values that might or might not include seconds
     start_dt = event.start_time
     if len(start_dt.split("T")[-1].split(":")) == 2:
@@ -480,7 +527,6 @@ def create_calendar_event(event: CalendarEventCreate, current_user: str = Depend
     if len(end_dt.split("T")[-1].split(":")) == 2:
         end_dt = f"{end_dt}:00"
         
-    # Payload format
     payload = {
         "summary": event.summary,
         "description": event.description or "",
@@ -492,6 +538,27 @@ def create_calendar_event(event: CalendarEventCreate, current_user: str = Depend
             "dateTime": end_dt,
             "timeZone": "Asia/Taipei"
         }
+    }
+    
+    # 1. Try Service Account first
+    service, calendar_id = get_calendar_service_from_env()
+    if service:
+        try:
+            created_event = service.events().insert(calendarId=calendar_id, body=payload).execute()
+            return created_event
+        except Exception as e:
+            logger.error(f"Error creating event via Service Account: {e}")
+            raise HTTPException(status_code=500, detail=f"Google API Error: {str(e)}")
+            
+    # 2. Fallback to Google OAuth
+    token = get_valid_google_token()
+    if not token:
+        raise HTTPException(status_code=400, detail="Google Calendar is not authorized.")
+    calendar_id = database.get_setting("google_calendar_id", "primary")
+    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
     }
     
     try:
@@ -508,6 +575,17 @@ def create_calendar_event(event: CalendarEventCreate, current_user: str = Depend
 
 @app.delete("/api/calendar/events/{event_id}")
 def delete_calendar_event(event_id: str, current_user: str = Depends(get_current_user)):
+    # 1. Try Service Account first
+    service, calendar_id = get_calendar_service_from_env()
+    if service:
+        try:
+            service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+            return {"message": "Event deleted successfully"}
+        except Exception as e:
+            logger.error(f"Error deleting event via Service Account: {e}")
+            raise HTTPException(status_code=500, detail=f"Google API Error: {str(e)}")
+            
+    # 2. Fallback to Google OAuth
     token = get_valid_google_token()
     if not token:
         raise HTTPException(status_code=400, detail="Google Calendar is not authorized.")
