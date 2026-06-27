@@ -798,8 +798,8 @@ input:focus, select:focus, textarea:focus {
 /* Calendar Card Styles – inner layout is now horizontal */
 .calendar-inner-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;   /* month grid on left, events panel on right */
-    gap: 20px;
+    grid-template-columns: 3fr 1fr;   /* wider month grid, narrower events panel */
+    gap: 16px;
     flex: 1;
     min-height: 0;
     overflow: hidden;
