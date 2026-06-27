@@ -16,6 +16,8 @@ let state = {
 document.addEventListener("DOMContentLoaded", () => {
     checkAuthStatus();
     startClock();
+    updateWeather();
+    setInterval(updateWeather, 900000); // Update every 15 minutes
 });
 
 // Clock Logic
@@ -44,6 +46,53 @@ function startClock() {
     
     updateClock();
     setInterval(updateClock, 1000);
+}
+
+// Weather Widget Logic
+async function updateWeather() {
+    try {
+        const response = await fetch("https://api.open-meteo.com/v1/forecast?latitude=24.957&longitude=121.225&current_weather=true&timezone=Asia%2FTaipei");
+        if (response.ok) {
+            const data = await response.json();
+            const temp = Math.round(data.current_weather.temperature);
+            const code = data.current_weather.weathercode;
+            
+            let conditionText = "晴時多雲";
+            let iconClass = "fa-solid fa-cloud-sun";
+            
+            // Map WMO Weather Interpretation Codes (WMO code)
+            if (code === 0) {
+                conditionText = "晴天";
+                iconClass = "fa-solid fa-sun text-yellow";
+            } else if ([1, 2, 3].includes(code)) {
+                conditionText = "多雲";
+                iconClass = "fa-solid fa-cloud-sun";
+            } else if ([45, 48].includes(code)) {
+                conditionText = "有霧";
+                iconClass = "fa-solid fa-smog";
+            } else if ([51, 53, 55, 56, 57].includes(code)) {
+                conditionText = "毛毛雨";
+                iconClass = "fa-solid fa-cloud-rain";
+            } else if ([61, 63, 65, 66, 67].includes(code)) {
+                conditionText = "下雨";
+                iconClass = "fa-solid fa-cloud-showers-heavy text-blue";
+            } else if ([71, 73, 75, 77].includes(code)) {
+                conditionText = "下雪";
+                iconClass = "fa-solid fa-snowflake";
+            } else if ([80, 81, 82].includes(code)) {
+                conditionText = "陣雨";
+                iconClass = "fa-solid fa-cloud-showers-water";
+            } else if ([95, 96, 99].includes(code)) {
+                conditionText = "雷陣雨";
+                iconClass = "fa-solid fa-cloud-bolt text-purple";
+            }
+            
+            document.getElementById("weather-temp").textContent = `${temp}°C`;
+            document.getElementById("weather-cond").innerHTML = `<i class="${iconClass}"></i> ${conditionText}`;
+        }
+    } catch (error) {
+        console.error("Failed to fetch weather data:", error);
+    }
 }
 
 // --- AUTHENTICATION ---

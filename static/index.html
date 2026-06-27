@@ -76,11 +76,18 @@
                 </div>
             </div>
             
-            <!-- Real-time Clock -->
+            <!-- Real-time Clock & Weather -->
             <div class="header-center">
                 <div class="clock-display">
                     <div id="clock-time">00:00:00</div>
                     <div id="clock-date">2026年06月26日 星期五</div>
+                </div>
+                <div class="weather-display" id="weather-widget">
+                    <div class="weather-info">
+                        <span class="weather-location"><i class="fa-solid fa-location-dot"></i> 中壢</span>
+                        <span id="weather-temp">--°C</span>
+                        <span id="weather-cond"><i class="fa-solid fa-spinner fa-spin"></i> 載入中</span>
+                    </div>
                 </div>
             </div>
             
@@ -101,7 +108,68 @@
         <!-- Main Workspace Grid -->
         <main class="dashboard-grid">
             
-            <!-- Left Side: To-Do Manager -->
+            <!-- Left Side: Google Calendar Sync -->
+            <section class="grid-card calendar-card">
+                <div class="card-header">
+                    <div class="header-title">
+                        <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
+                        <h2>我的日程表</h2>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                        <button class="btn btn-primary" onclick="openAddEventModal()">
+                            <i class="fa-solid fa-plus"></i> <span>安排行程</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Content -->
+                <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
+                    <div class="disconnected-content">
+                        <div class="icon-glow">
+                            <i class="fa-brands fa-google"></i>
+                        </div>
+                        <h3>串接 Google 日曆</h3>
+                        <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
+                        <button class="btn btn-primary" onclick="openSettingsModal()">
+                            <i class="fa-solid fa-link"></i> 前往設定進行授權
+                        </button>
+                    </div>
+                </div>
+
+                <div id="calendar-connected-state" class="calendar-inner-grid">
+                    <!-- Mini Month Calendar -->
+                    <div class="mini-calendar-container">
+                        <div class="mini-calendar-header">
+                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                            <h3 id="mini-calendar-month-year">2026年6月</h3>
+                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="mini-calendar-weekdays">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="mini-calendar-days" class="mini-calendar-days">
+                            <!-- Dynamic days -->
+                        </div>
+                    </div>
+
+                    <!-- Upcoming Events List -->
+                    <div class="events-timeline">
+                        <h3>接下來的行程</h3>
+                        <div id="events-list-empty" class="empty-state hidden">
+                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
+                            <p>此日期沒有安排任何行程</p>
+                        </div>
+                        <div id="events-list" class="events-list">
+                            <!-- Dynamic events -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: To-Do Manager -->
             <section class="grid-card todo-card">
                 <div class="card-header">
                     <div class="header-title">
@@ -162,67 +230,6 @@
                     <ul id="todo-list" class="todo-list">
                         <!-- Dynamic items -->
                     </ul>
-                </div>
-            </section>
-
-            <!-- Right Side: Google Calendar Sync -->
-            <section class="grid-card calendar-card">
-                <div class="card-header">
-                    <div class="header-title">
-                        <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
-                        <h2>我的日程表</h2>
-                    </div>
-                    <div class="card-actions">
-                        <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
-                            <i class="fa-solid fa-rotate-right"></i>
-                        </button>
-                        <button class="btn btn-primary" onclick="openAddEventModal()">
-                            <i class="fa-solid fa-plus"></i> <span>安排行程</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Calendar Content -->
-                <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
-                    <div class="disconnected-content">
-                        <div class="icon-glow">
-                            <i class="fa-brands fa-google"></i>
-                        </div>
-                        <h3>串接 Google 日曆</h3>
-                        <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
-                        <button class="btn btn-primary" onclick="openSettingsModal()">
-                            <i class="fa-solid fa-link"></i> 前往設定進行授權
-                        </button>
-                    </div>
-                </div>
-
-                <div id="calendar-connected-state" class="calendar-inner-grid">
-                    <!-- Mini Month Calendar -->
-                    <div class="mini-calendar-container">
-                        <div class="mini-calendar-header">
-                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
-                            <h3 id="mini-calendar-month-year">2026年6月</h3>
-                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
-                        </div>
-                        <div class="mini-calendar-weekdays">
-                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
-                        </div>
-                        <div id="mini-calendar-days" class="mini-calendar-days">
-                            <!-- Dynamic days -->
-                        </div>
-                    </div>
-
-                    <!-- Upcoming Events List -->
-                    <div class="events-timeline">
-                        <h3>接下來的行程</h3>
-                        <div id="events-list-empty" class="empty-state hidden">
-                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
-                            <p>此日期沒有安排任何行程</p>
-                        </div>
-                        <div id="events-list" class="events-list">
-                            <!-- Dynamic events -->
-                        </div>
-                    </div>
                 </div>
             </section>
         </main>

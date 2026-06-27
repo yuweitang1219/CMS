@@ -433,7 +433,7 @@ input:focus, select:focus, textarea:focus {
 /* Dashboard Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1.1fr 1.2fr;
+    grid-template-columns: 1.5fr 1fr;
     gap: 20px;
     flex: 1;
     min-height: 0; /* Important for scroll */
@@ -1382,7 +1382,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Media Queries (Responsive) */
-@media (max-width: 1200px) {
+@media (max-width: 950px) {
     .dashboard-grid {
         grid-template-columns: 1fr;
         gap: 30px;
@@ -1443,4 +1443,60 @@ input:focus, select:focus, textarea:focus {
         width: 100%;
         justify-content: center;
     }
+}
+
+/* Weather Widget Styles */
+.header-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+}
+
+.weather-display {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.weather-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weather-location {
+    font-weight: 700;
+    color: var(--accent-cyan);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#weather-temp {
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+#weather-cond {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.text-yellow {
+    color: #ffb703;
+}
+.text-blue {
+    color: #4cc9f0;
+}
+.text-purple {
+    color: #9d4ede;
 }
