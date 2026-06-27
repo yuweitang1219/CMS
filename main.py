@@ -699,10 +699,10 @@ async def line_webhook(request: Request):
     body_str = body.decode('utf-8')
     signature = request.headers.get("x-line-signature", "")
     
-    # Retrieve configuration settings dynamically from SQLite database
-    channel_secret = database.get_setting("line_channel_secret")
-    channel_access_token = database.get_setting("line_channel_access_token")
-    authorized_user_id = database.get_setting("line_authorized_user_id")
+    # Retrieve configuration settings: DB first, then env var fallback
+    channel_secret = database.get_setting("line_channel_secret") or os.environ.get("LINE_CHANNEL_SECRET")
+    channel_access_token = database.get_setting("line_channel_access_token") or os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+    authorized_user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
     gemini_api_key = database.get_setting("gemini_api_key") or os.environ.get("GEMINI_API_KEY")
     
     if not channel_secret or not channel_access_token:
