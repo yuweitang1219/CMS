@@ -1,27 +1,27 @@
 /* CSS Design Tokens */
 :root {
-    --bg-dark: #07080e;
-    --bg-indigo: #101222;
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --text-muted: #6b7280;
+    --bg-dark: #f6f8fb;
+    --bg-indigo: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
     
     /* Accents & Gradients */
-    --accent-purple: #9d4edd;
-    --accent-cyan: #00f5d4;
-    --accent-orange: #ff7b00;
-    --accent-pink: #ff0054;
-    --accent-green: #06d6a0;
+    --accent-purple: #6366f1;
+    --accent-cyan: #0ea5e9;
+    --accent-orange: #f97316;
+    --accent-pink: #ec4899;
+    --accent-green: #10b981;
     
     --grad-primary: linear-gradient(135deg, var(--accent-purple) 0%, var(--accent-cyan) 100%);
     --grad-todo: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-pink) 100%);
     --grad-green: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
     
     /* Glassmorphism settings */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-border: rgba(255, 255, 255, 0.07);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    --glass-blur: blur(16px);
+    --glass-bg: rgba(255, 255, 255, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.5);
+    --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+    --glass-blur: blur(20px);
     
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -59,7 +59,7 @@ body {
     position: absolute;
     border-radius: 50%;
     filter: blur(120px);
-    opacity: 0.15;
+    opacity: 0.06;
     animation: float 20s infinite alternate ease-in-out;
 }
 
@@ -106,7 +106,7 @@ a {
     transition: var(--transition-smooth);
 }
 a:hover {
-    text-shadow: 0 0 8px rgba(0, 245, 212, 0.4);
+    text-decoration: underline;
 }
 
 /* Interactive Elements */
@@ -135,12 +135,12 @@ a:hover {
 }
 
 .btn-secondary {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.04);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
 }
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(15, 23, 42, 0.08);
     transform: translateY(-2px);
 }
 
@@ -190,8 +190,8 @@ input[type="datetime-local"],
 input[type="date"],
 select,
 textarea {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--glass-border);
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.12);
     border-radius: 12px;
     padding: 12px 16px;
     color: var(--text-primary);
@@ -204,8 +204,8 @@ textarea {
 
 input:focus, select:focus, textarea:focus {
     border-color: var(--accent-purple);
-    box-shadow: 0 0 10px rgba(157, 78, 221, 0.25);
-    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.12);
+    background: #ffffff;
 }
 
 /* Authentication Page */
@@ -389,7 +389,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(15, 23, 42, 0.04);
     padding: 6px 14px;
     border-radius: 12px;
     border: 1px solid var(--glass-border);
@@ -421,13 +421,14 @@ input:focus, select:focus, textarea:focus {
 }
 
 .btn-settings {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(15, 23, 42, 0.04);
     border: 1px solid var(--glass-border);
     color: var(--text-primary);
 }
 .btn-settings:hover {
     background: var(--grad-primary);
     border-color: transparent;
+    color: white;
 }
 
 /* Dashboard Grid */
@@ -539,8 +540,8 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255,255,255,0.04);
+    background: rgba(15, 23, 42, 0.02);
+    border: 1px solid rgba(15, 23, 42, 0.05);
     padding: 16px;
     border-radius: 16px;
     margin-bottom: 20px;
@@ -590,8 +591,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .filter-btn {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(15, 23, 42, 0.02);
+    border: 1px solid rgba(15, 23, 42, 0.05);
     color: var(--text-secondary);
     padding: 6px 16px;
     border-radius: 20px;
@@ -602,7 +603,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .filter-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(15, 23, 42, 0.06);
     color: var(--text-primary);
 }
 
@@ -644,8 +645,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .todo-item {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(15, 23, 42, 0.06);
     border-radius: 14px;
     padding: 14px 18px;
     display: flex;
@@ -657,8 +658,8 @@ input:focus, select:focus, textarea:focus {
 }
 
 .todo-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(15, 23, 42, 0.12);
     transform: translateX(4px);
 }
 
@@ -746,9 +747,9 @@ input:focus, select:focus, textarea:focus {
 }
 
 .badge-priority.low {
-    background: rgba(0, 245, 212, 0.1);
-    color: #00ffd0;
-    border: 1px solid rgba(0, 245, 212, 0.25);
+    background: rgba(13, 148, 136, 0.1);
+    color: #0f766e;
+    border: 1px solid rgba(13, 148, 136, 0.25);
 }
 
 .todo-due {
@@ -807,8 +808,8 @@ input:focus, select:focus, textarea:focus {
 
 /* Mini Calendar */
 .mini-calendar-container {
-    background: rgba(255, 255, 255, 0.015);
-    border: 1px solid rgba(255,255,255,0.03);
+    background: rgba(15, 23, 42, 0.015);
+    border: 1px solid rgba(15, 23, 42, 0.04);
     border-radius: 16px;
     padding: 14px;
 }
@@ -871,20 +872,20 @@ input:focus, select:focus, textarea:focus {
     cursor: pointer;
     color: var(--text-secondary);
     transition: var(--transition-smooth);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(15, 23, 42, 0.05);
+    background: rgba(255, 255, 255, 0.35);
     box-sizing: border-box;
 }
 .mini-day:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.8);
     color: var(--text-primary);
-    border-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(15, 23, 42, 0.15);
 }
 
 .mini-day.prev-month,
 .mini-day.next-month {
-    color: rgba(255, 255, 255, 0.15);
-    opacity: 0.5;
+    color: var(--text-muted);
+    opacity: 0.35;
 }
 
 .mini-day.today {
@@ -942,9 +943,9 @@ input:focus, select:focus, textarea:focus {
     font-size: 0.65rem;
     font-weight: 500;
     padding: 2px 5px;
-    background: rgba(157, 78, 221, 0.15);
+    background: rgba(99, 102, 241, 0.12);
     border-left: 2.5px solid var(--accent-purple);
-    color: #e0aaff;
+    color: var(--accent-purple);
     border-radius: 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -955,7 +956,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .day-event-item:hover {
-    background: rgba(157, 78, 221, 0.25);
+    background: var(--accent-purple);
     color: white;
 }
 
@@ -985,11 +986,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 .event-item {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.4);
     border-left: 4px solid var(--accent-purple);
-    border-top: 1px solid rgba(255, 255, 255, 0.03);
-    border-right: 1px solid rgba(255, 255, 255, 0.03);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(15, 23, 42, 0.04);
+    border-right: 1px solid rgba(15, 23, 42, 0.04);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.04);
     border-radius: 0 12px 12px 0;
     padding: 14px 18px;
     display: flex;
@@ -1001,7 +1002,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .event-item:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.85);
     transform: scale(1.01);
 }
 
@@ -1053,14 +1054,14 @@ input:focus, select:focus, textarea:focus {
     left: 30px;
     right: 30px;
     bottom: 30px;
-    background: rgba(7, 8, 14, 0.8);
+    background: rgba(246, 248, 251, 0.8);
     backdrop-filter: blur(8px);
     z-index: 10;
     border-radius: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(15, 23, 42, 0.05);
 }
 
 .disconnected-content {
@@ -1104,7 +1105,7 @@ input:focus, select:focus, textarea:focus {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(15, 23, 42, 0.4);
     backdrop-filter: blur(10px);
     z-index: 1000;
     display: flex;
@@ -1115,9 +1116,9 @@ input:focus, select:focus, textarea:focus {
 }
 
 .modal-card {
-    background: rgba(15, 17, 30, 0.95);
+    background: rgba(255, 255, 255, 0.96);
     border: 1px solid var(--glass-border);
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.12);
     border-radius: 24px;
     width: 100%;
     display: flex;
@@ -1139,7 +1140,7 @@ input:focus, select:focus, textarea:focus {
     justify-content: space-between;
     align-items: center;
     padding: 25px 30px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
     flex-shrink: 0;
 }
 
@@ -1175,7 +1176,7 @@ input:focus, select:focus, textarea:focus {
     justify-content: flex-end;
     gap: 12px;
     padding: 20px 30px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
     flex-shrink: 0;
 }
 
@@ -1317,13 +1318,13 @@ input:focus, select:focus, textarea:focus {
 
 .settings-divider {
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
     margin: 10px 0;
 }
 
 .setup-guide {
-    background: rgba(255, 255, 255, 0.015);
-    border: 1px solid rgba(255,255,255,0.03);
+    background: rgba(15, 23, 42, 0.015);
+    border: 1px solid rgba(15, 23, 42, 0.04);
     border-radius: 12px;
     padding: 16px 20px;
     margin-top: 20px;
@@ -1345,7 +1346,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .setup-guide code {
-    background: rgba(0,0,0,0.3);
+    background: rgba(15, 23, 42, 0.06);
     padding: 2px 6px;
     border-radius: 4px;
     color: var(--accent-pink);
@@ -1469,15 +1470,15 @@ input:focus, select:focus, textarea:focus {
 }
 
 .weather-display {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(15, 23, 42, 0.03);
+    border: 1px solid rgba(15, 23, 42, 0.06);
     border-radius: 12px;
     padding: 6px 14px;
     display: flex;
     align-items: center;
     font-size: 0.8rem;
     color: var(--text-secondary);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
 }
 
 .weather-info {
