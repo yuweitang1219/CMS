@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=1.1">
+    <link rel="stylesheet" href="/styles.css?v=1.2">
 </head>
 <body>
     
@@ -99,6 +99,9 @@
                         <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     </button>
                 </div>
+                <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
+                    <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
+                </button>
                 <button class="btn btn-settings" onclick="openSettingsModal()">
                     <i class="fa-solid fa-sliders"></i> <span>設定</span>
                 </button>
@@ -421,6 +424,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=1.1"></script>
+    <script src="/app.js?v=1.2"></script>
 </body>
 </html>

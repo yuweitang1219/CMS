@@ -892,3 +892,38 @@ function escapeHTML(str) {
         }[tag] || tag)
     );
 }
+
+// Fullscreen API Helper
+function toggleFullscreen() {
+    const btn = document.getElementById("fullscreen-btn");
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen()
+            .then(() => {
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-compress"></i> <span>視窗模式</span>';
+                }
+            })
+            .catch(err => {
+                showToast("無法啟動全螢幕模式：" + err.message);
+            });
+    } else {
+        document.exitFullscreen()
+            .then(() => {
+                if (btn) {
+                    btn.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
+                }
+            });
+    }
+}
+
+// Sync fullscreen button status (in case user exits with ESC key)
+document.addEventListener("fullscreenchange", () => {
+    const btn = document.getElementById("fullscreen-btn");
+    if (btn) {
+        if (document.fullscreenElement) {
+            btn.innerHTML = '<i class="fa-solid fa-compress"></i> <span>視窗模式</span>';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
+        }
+    }
+});
