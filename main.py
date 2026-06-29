@@ -816,6 +816,113 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error generating plan: {e}")
                     reply_msg = f"生成計畫書時發生錯誤：{str(e)}\n請確認個案資料是否完整，或輸入「重新開始」重試。"
+        elif any(user_text.lower().startswith(prefix) for prefix in [
+            "待辦事項：", "待辦事項:", "待辦事項 ",
+            "新增待辦：", "新增待辦:", "新增待辦 ",
+            "待辦：", "待辦:", "待辦 ",
+            "代辦事項：", "代辦事項:", "代辦事項 ",
+            "新增代辦：", "新增代辦:", "新增代辦 ",
+            "代辦：", "代辦:", "代辦 ",
+            "todo:", "todo：", "todo "
+        ]):
+            import re
+            
+            # Find the matching prefix to extract content
+            todo_title = ""
+            for prefix in [
+                "待辦事項：", "待辦事項:", "待辦事項 ",
+                "新增待辦：", "新增待辦:", "新增待辦 ",
+                "待辦：", "待辦:", "待辦 ",
+                "代辦事項：", "代辦事項:", "代辦事項 ",
+                "新增代辦：", "新增代辦:", "新增代辦 ",
+                "代辦：", "代辦:", "代辦 ",
+                "todo:", "todo：", "todo "
+            ]:
+                if user_text.lower().startswith(prefix):
+                    todo_title = user_text[len(prefix):].strip()
+                    break
+            
+            if not todo_title:
+                reply_msg = "⚠️ 請提供待辦事項的內容！\n例如：\n• 待辦：下午兩點與陳照專開會\n• todo: 買感冒藥"
+            else:
+                try:
+                    priority = 'medium'
+                    # Check for priority prefixes
+                    if todo_title.startswith("高：") or todo_title.startswith("高:") or todo_title.lower().startswith("high:") or todo_title.lower().startswith("high："):
+                        priority = 'high'
+                        for p_prefix in ["高：", "高:", "high:", "high："]:
+                            if todo_title.lower().startswith(p_prefix):
+                                todo_title = todo_title[len(p_prefix):].strip()
+                                break
+                    elif todo_title.startswith("低：") or todo_title.startswith("低:") or todo_title.lower().startswith("low:") or todo_title.lower().startswith("low："):
+                        priority = 'low'
+                        for p_prefix in ["低：", "低:", "low:", "low："]:
+                            if todo_title.lower().startswith(p_prefix):
+                                todo_title = todo_title[len(p_prefix):].strip()
+                                break
+                    elif todo_title.startswith("中：") or todo_title.startswith("中:") or todo_title.lower().startswith("medium:") or todo_title.lower().startswith("medium："):
+                        priority = 'medium'
+                        for p_prefix in ["中：", "中:", "medium:", "medium："]:
+                            if todo_title.lower().startswith(p_prefix):
+                                todo_title = todo_title[len(p_prefix):].strip()
+                                break
+                    
+                    # Parse due date
+                    due_date = None
+                    # Calculate local date/time (Asia/Taipei UTC+8)
+                    local_now = datetime.utcnow() + timedelta(hours=8)
+                    
+                    if "明天" in todo_title:
+                        due_date = (local_now + timedelta(days=1)).strftime("%Y-%m-%d")
+                        todo_title = todo_title.replace("明天", "").strip()
+                    elif "後天" in todo_title:
+                        due_date = (local_now + timedelta(days=2)).strftime("%Y-%m-%d")
+                        todo_title = todo_title.replace("後天", "").strip()
+                    elif "今天" in todo_title:
+                        due_date = local_now.strftime("%Y-%m-%d")
+                        todo_title = todo_title.replace("今天", "").strip()
+                    
+                    if not due_date:
+                        # Match YYYY-MM-DD or YYYY/MM/DD
+                        full_date_match = re.search(r'\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b', todo_title)
+                        if full_date_match:
+                            year = int(full_date_match.group(1))
+                            month = int(full_date_match.group(2))
+                            day = int(full_date_match.group(3))
+                            due_date = f"{year:04d}-{month:02d}-{day:02d}"
+                            todo_title = todo_title.replace(full_date_match.group(0), "").strip()
+                        else:
+                            # Match MM-DD or MM/DD (e.g. 6/30 or 06-30)
+                            short_date_match = re.search(r'\b(\d{1,2})[-/](\d{1,2})\b', todo_title)
+                            if short_date_match:
+                                year = local_now.year
+                                month = int(short_date_match.group(1))
+                                day = int(short_date_match.group(2))
+                                due_date = f"{year:04d}-{month:02d}-{day:02d}"
+                                todo_title = todo_title.replace(short_date_match.group(0), "").strip()
+                    
+                    # Clean up trailing/leading helper words, colons, spaces, and punctuation
+                    todo_title = re.sub(r'\b(期限|截止)[:：]?\s*$', '', todo_title).strip()
+                    todo_title = re.sub(r'^(期限|截止)[:：]?\s*', '', todo_title).strip()
+                    todo_title = todo_title.strip(" :：,-_")
+                    
+                    # If cleaning made it empty, use a default title
+                    if not todo_title:
+                        todo_title = "未命名任務"
+                    
+                    # Add to sqlite database
+                    todo_id = database.add_todo(todo_title, priority, due_date)
+                    
+                    priority_zh = {"high": "高", "medium": "中", "low": "低"}.get(priority, "中")
+                    date_info = f"\n• 截止日期：{due_date}" if due_date else ""
+                    reply_msg = (
+                        f"✅ 已成功新增待辦事項：\n"
+                        f"• 內容：「{todo_title}」\n"
+                        f"• 優先度：{priority_zh}{date_info}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error adding todo from LINE: {e}")
+                    reply_msg = f"❌ 新增待辦事項時發生錯誤：{str(e)}"
         else:
             if not gemini_api_key:
                 reply_msg = "系統錯誤：未設定 GEMINI_API_KEY，請在網頁設定面板中貼上您的金鑰。"
