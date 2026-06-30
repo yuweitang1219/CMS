@@ -418,6 +418,37 @@ function updateGoogleBadge(isConnected) {
     }
 }
 
+function formatEventSummaryForCell(summary) {
+    if (!summary) return "";
+    let clean = summary.replace(/[\u2300-\u27BF]|📋|⚡|🔥|⭐/g, "").trim();
+    if (clean.includes("私人行程：")) {
+        return clean.replace("私人行程：", "私人 ");
+    }
+    if (clean.includes("私人行程:")) {
+        return clean.replace("私人行程:", "私人 ");
+    }
+    let name = "";
+    let type = "";
+    if (clean.includes("家訪：") || clean.includes("家訪:")) {
+        let part = clean.includes("家訪：") ? clean.split("家訪：")[1] : clean.split("家訪:")[1];
+        part = part.trim();
+        name = part.split("(")[0].split(" ")[0].trim();
+        if (part.includes("(")) {
+            let inside = part.split("(")[1].split(")")[0];
+            if (inside.includes("AA01")) type = "AA01";
+            else if (inside.includes("複評") || inside.includes("ReEval")) type = "複評";
+            else if (inside.includes("共訪") || inside.includes("CoVisit")) type = "共訪";
+            else if (inside.includes("新案") || inside.includes("NewCase")) type = "新案";
+            else if (inside.includes("準新案") || inside.includes("PreNewCase")) type = "準新案";
+            else if (inside.includes("計畫異動") || inside.includes("PlanChange")) type = "異動";
+            else type = inside.split(" ")[0].trim();
+        }
+    }
+    if (name && type) return `${name} ${type}`;
+    if (name) return name;
+    return clean;
+}
+
 function renderMiniCalendar() {
     const container = document.getElementById("mini-calendar-days");
     const monthYearLabel = document.getElementById("mini-calendar-month-year");
@@ -502,7 +533,7 @@ function renderMiniCalendar() {
                 const mins = String(eventTime.getMinutes()).padStart(2, '0');
                 timeStr = `${hrs}:${mins}`;
             }
-            eventDiv.textContent = `${timeStr} ${event.summary}`;
+            eventDiv.textContent = `${timeStr} ${formatEventSummaryForCell(event.summary)}`;
             eventDiv.title = `${timeStr} ${event.summary}${event.description ? '\n' + event.description : ''}`;
             
             eventsContainer.appendChild(eventDiv);
