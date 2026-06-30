@@ -718,6 +718,7 @@ async function loadSettings() {
             // Populating Google Settings Form & Status
             document.getElementById("google-client-id").value = data.google.client_id || "";
             document.getElementById("google-calendar-id").value = data.google.calendar_id || "primary";
+            document.getElementById("google-drive-folder-id").value = data.google.drive_folder_id || "";
             const gConnectedEl = document.getElementById("google-status-connected");
             const gDisconnectedEl = document.getElementById("google-status-disconnected");
             
@@ -767,6 +768,7 @@ async function handleSaveGoogleSettings(event) {
     const clientId = document.getElementById("google-client-id").value.trim();
     const clientSecret = document.getElementById("google-client-secret").value.trim();
     const calendarId = document.getElementById("google-calendar-id").value.trim();
+    const driveFolderId = document.getElementById("google-drive-folder-id").value.trim();
     
     try {
         const response = await fetch("/api/settings/google", {
@@ -775,7 +777,8 @@ async function handleSaveGoogleSettings(event) {
             body: JSON.stringify({ 
                 client_id: clientId, 
                 client_secret: clientSecret, 
-                calendar_id: calendarId 
+                calendar_id: calendarId,
+                drive_folder_id: driveFolderId
             })
         });
         if (response.ok) {
@@ -856,6 +859,7 @@ async function disconnectGoogle() {
 function openSettingsModal() {
     document.getElementById("settings-modal").classList.remove("hidden");
     loadSettings();
+    loadServiceAccountEmail();
 }
 
 function closeSettingsModal() {
@@ -969,4 +973,20 @@ function areTodosEqual(td1, td2) {
         }
     }
     return true;
+}
+
+// Fetch the service account email from backend to display it
+async function loadServiceAccountEmail() {
+    try {
+        const response = await fetch("/api/settings/service_account_email");
+        if (response.ok) {
+            const data = await response.json();
+            const displayEl = document.getElementById("service-account-email-display");
+            if (displayEl) {
+                displayEl.textContent = data.email || "未設定 Service Account 憑證，請聯絡系統管理員設定 GOOGLE_SERVICE_ACCOUNT_JSON";
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load service account email:", e);
+    }
 }

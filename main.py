@@ -107,6 +107,7 @@ class SettingsGoogle(BaseModel):
     client_id: str
     client_secret: str
     calendar_id: Optional[str] = "primary"
+    drive_folder_id: Optional[str] = ""
 
 class SettingsLine(BaseModel):
     channel_access_token: str
@@ -311,6 +312,7 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
     g_calendar_id = database.get_setting("google_calendar_id", "primary")
     g_email = database.get_setting("google_user_email", "")
     g_connected = bool(database.get_setting("google_refresh_token"))
+    g_drive_folder_id = database.get_setting("google_drive_folder_id", "")
     
     l_token = database.get_setting("line_channel_access_token", "")
     l_secret = database.get_setting("line_channel_secret", "")
@@ -326,7 +328,8 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
             "client_id": g_client_id,
             "calendar_id": g_calendar_id,
             "connected": g_connected,
-            "email": g_email
+            "email": g_email,
+            "drive_folder_id": g_drive_folder_id
         },
         "line": {
             "webhook_url": webhook_url,
@@ -370,6 +373,7 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     database.set_setting("google_client_id", settings.client_id)
     database.set_setting("google_client_secret", settings.client_secret)
     database.set_setting("google_calendar_id", clean_cal_id)
+    database.set_setting("google_drive_folder_id", settings.drive_folder_id.strip() if settings.drive_folder_id else "")
     
     if credentials_changed:
         # Clear old tokens
@@ -394,6 +398,19 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     )
     
     return {"auth_url": auth_url}
+
+@app.get("/api/settings/service_account_email")
+def get_service_account_email(current_user: str = Depends(get_current_user)):
+    import json
+    import os
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if sa_json:
+        try:
+            info = json.loads(sa_json)
+            return {"email": info.get("client_email", "")}
+        except Exception:
+            pass
+    return {"email": ""}
 
 @app.post("/api/settings/line")
 def save_line_settings(settings: SettingsLine, current_user: str = Depends(get_current_user)):
@@ -806,6 +823,17 @@ async def line_webhook(request: Request):
                     plan_preview = result['planText']
                     download_url = f"{base_url}/download/{user_id}"
                     
+                    # Try to upload to Google Drive if configured
+                    drive_msg = ""
+                    try:
+                        from core.drive_helper import upload_plan_to_drive
+                        drive_res = upload_plan_to_drive(state, plan_preview)
+                        if drive_res.get("success"):
+                            drive_url = drive_res.get("link")
+                            drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
+                    except Exception as de:
+                        logger.error(f"Error in automatic Google Drive upload: {de}")
+                        
                     plan_intro = plan_preview[:800] + "\n...（完整內容請下載 Word 檔）" if len(plan_preview) > 800 else plan_preview
                     reply_msg = (
                         f"{fee_preview}\n\n"
@@ -813,6 +841,7 @@ async def line_webhook(request: Request):
                         f"📄 計畫書預覽（前段）：\n{plan_intro}\n"
                         "====================\n"
                         f"⬇️ 點此下載完整 Word 檔：\n{download_url}"
+                        f"{drive_msg}"
                     )
                 except Exception as e:
                     logger.error(f"Error generating plan: {e}")

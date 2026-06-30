@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=1.4">
+    <link rel="stylesheet" href="/styles.css?v=1.5">
 </head>
 <body>
     
@@ -292,6 +292,13 @@
                             <label for="google-calendar-id">Google Calendar ID (選填，預設為主要日曆)</label>
                             <input type="text" id="google-calendar-id" placeholder="留空預設為 primary；特定日曆請輸入 xxxx@group.calendar.google.com" autocomplete="off">
                         </div>
+                        <div class="input-group">
+                            <label for="google-drive-folder-id">Google Drive 雲端共用資料夾 ID (選填，方案 A)</label>
+                            <input type="text" id="google-drive-folder-id" placeholder="例如：1aBcDeFgHiJkLmNoPqRsTuVwXyZ" autocomplete="off">
+                            <span class="input-helper" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: block;">
+                                💡 請先將該雲端資料夾共用給此服務帳號，並給予編輯者權限：<br><strong id="service-account-email-display" style="color: var(--accent-purple); word-break: break-all;">載入中...</strong>
+                            </span>
+                        </div>
                         <div class="settings-action-row">
                             <a href="https://console.cloud.google.com/" target="_blank" class="link-btn"><i class="fa-solid fa-up-right-from-square"></i> 開啟 Google Cloud Console</a>
                             <button type="submit" class="btn btn-primary">儲存並進行 Google 授權</button>
@@ -424,6 +431,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=1.4"></script>
+    <script src="/app.js?v=1.5"></script>
 </body>
 </html>

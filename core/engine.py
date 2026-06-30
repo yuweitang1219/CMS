@@ -207,13 +207,48 @@ def generate_plan(state):
     cogStr = genStr(state.get('selectedCognition', []), '無明顯異常')
     fallStr = genStr(state.get('selectedFalls', []), '無')
     
-    adlData = state.get('adlData', {})
-    adlArr = [f"{k}({v})" for k, v in adlData.items() if v]
-    adlVal = "、".join(adlArr) if adlArr else "無"
+    def format_adl_grouped(data_dict):
+        if not data_dict:
+            return "無"
+        groups = {}
+        for k, v in data_dict.items():
+            if not v:
+                continue
+            groups.setdefault(v, []).append(k)
+            
+        parts = []
+        ordered_levels = ["完全協助", "部分協助", "需要協助", "需協助", "獨立"]
+        seen_levels = set()
+        
+        for level in ordered_levels:
+            if level in groups:
+                items = groups[level]
+                seen_levels.add(level)
+                items_str = "、".join(items)
+                
+                if level == "部分協助":
+                    suffix = "皆需部分協助" if len(items) > 1 else "需部分協助"
+                elif level == "完全協助":
+                    suffix = "皆需完全協助" if len(items) > 1 else "需完全協助"
+                elif level == "獨立":
+                    suffix = "皆可獨立" if len(items) > 1 else "可獨立"
+                elif level in ["需要協助", "需協助"]:
+                    suffix = "皆需協助" if len(items) > 1 else "需協助"
+                else:
+                    suffix = f"皆{level}" if len(items) > 1 else level
+                    
+                parts.append(f"{items_str}{suffix}")
+                
+        for level, items in groups.items():
+            if level not in seen_levels:
+                items_str = "、".join(items)
+                suffix = f"皆{level}" if len(items) > 1 else level
+                parts.append(f"{items_str}{suffix}")
+                
+        return "、".join(parts) if parts else "無"
 
-    iadlData = state.get('iadlData', {})
-    iadlArr = [f"{k}({v})" for k, v in iadlData.items() if v]
-    iadlVal = "、".join(iadlArr) if iadlArr else "無"
+    adlVal = format_adl_grouped(state.get('adlData', {}))
+    iadlVal = format_adl_grouped(state.get('iadlData', {}))
 
     incomeVal = genStr(state.get('selectedIncome', []), '無明顯收入來源')
     livingStr = state.get('livingStr', '無')
