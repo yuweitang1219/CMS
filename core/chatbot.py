@@ -373,10 +373,10 @@ def process_chat(user_id, user_message, api_key):
 7. **私人行程與個人活動處理規則 (重要)**：
    - 當判斷計畫類型 (planType) 為 "Private" 時，代表這是一個個人活動或非公事家訪行程（例如「去衛生局」、「開會」、「下午請假」等），請將該行程的具體內容直接填入 姓名 (name) 欄位中（例如將 name 設為 "去衛生局"）。
    - 在產生回覆文字 (reply_text) 時，**絕對不要問任何與個案相關的問題**（例如：不要問姓名、身分別、CMS等級、ADL等），也不要詢問這是什麼計畫類型。
-   - 只要簡短親切地回覆：「已為您記錄此私人行程，並已同步至行事曆。」或類似的確認即可，並提示如果需要記錄下一個個案，可隨時輸入「重新開始」。
+   - 只要簡短親切地回覆：「已記錄此行程。如果需要同步到 Google 行事曆，請輸入「建立行事曆」或「同步行事曆」！」或類似的確認即可，並提示如果需要記錄下一個個案，可隨時輸入「重新開始」。
 8. **新個案/新行程偵測與重設規則 (重要)**：
    - 當個管師提及一個與目前狀態姓名 (name) 不同的**全新個案姓名**，或是明確表示要安排**另一場新的訪視/私人行程**時（例如：原先已記錄「王小明」，現在突然說「15:00家訪李小華」），你必須判定這是一個新案/新行程。
-   - 在此情況下，你必須將回傳的 `updated_state` JSON **重設為預設狀態（清除上一位個案的殘留評估資料）**，特別是必須**清除 `googleEventId`（將其設為 `""`、`null` 或從 JSON 鍵中移除）**，以利系統為此新預約在日曆上建立**全新**行程（而非修改/覆蓋上一個預約）。新個案的姓名填入 `name`，新時間/日期填入 `visitTime` / `visitDate`，其他評估欄位（如疾病、CMS、ADL、配置服務等）重設為初始/預設值。
+   - 在此情況下，你必須將回傳的 `updated_state` JSON **重設為預設狀態（清除上一位個案的殘留評估資料）**，特別是必須**清除 `googleEventId`（將其設為 `""`、`null` 或從 JSON 鍵中移除）**，以利後續您輸入「建立行事曆」時為此新預約在日曆上建立**全新**行程（而非修改/覆蓋上一個預約）。新個案的姓名填入 `name`，新時間/日期填入 `visitTime` / `visitDate`，其他評估欄位（如疾病、CMS、ADL、配置服務等）重設為初始/預設值。
    - 回覆文字（reply_text）應簡短確認已為新個案開啟記錄，並主動詢問其基本資訊。
 9. **輸出格式規範**：你必須回傳一個合法的 JSON 物件，不能包含額外的 markdown 程式碼區塊（如 ```json ... ```），只能是純 JSON 字串。
 
@@ -413,36 +413,7 @@ JSON 必須包含以下兩個鍵：
                 current_rules.append(new_rule)
                 save_rules(user_id, current_rules)
         
-        # Check if we should sync to Google Calendar in real-time
-        old_date = state.get("visitDate")
-        new_date = updated_state.get("visitDate")
-        old_name = state.get("name")
-        new_name = updated_state.get("name")
-        has_event = bool(state.get("googleEventId") or updated_state.get("googleEventId"))
-        
-        should_sync = False
-        if new_date:
-            if not has_event:
-                should_sync = True
-            elif new_date != old_date:
-                should_sync = True
-            elif new_name != old_name and new_name != "未提供資料":
-                should_sync = True
-                
-        import database
-        has_oauth = bool(database.get_setting("google_refresh_token"))
-        has_service_account = bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
-        if should_sync and (has_oauth or has_service_account):
-            try:
-                from .calendar_helper import sync_to_calendar
-                sync_res = sync_to_calendar(updated_state)
-                if sync_res.get("success"):
-                    updated_state["googleEventId"] = sync_res.get("event_id")
-                    action_str = "更新" if has_event else "建立"
-                    type_str = "私人行程" if updated_state.get("planType") == "Private" else "家訪行程"
-                    reply_text += f"\n\n📅 已自動在 Google 行事曆{action_str}此{type_str}！"
-            except Exception as se:
-                print("Error syncing to calendar during process_chat:", se)
+
 
         # Save updated history in state
         history.append({"role": "assistant", "content": reply_text})

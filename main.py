@@ -817,6 +817,29 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error generating plan: {e}")
                     reply_msg = f"生成計畫書時發生錯誤：{str(e)}\n請確認個案資料是否完整，或輸入「重新開始」重試。"
+        elif user_text in ["建立行事曆", "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", "建立行程"]:
+            state = load_session(user_id)
+            if state.get("name") == "未提供資料":
+                reply_msg = "⚠️ 尚未開始建立個案，請先輸入個案的姓名（如「個案名字是張三」）以開始建立資料！"
+            elif not state.get("visitDate"):
+                reply_msg = "⚠️ 尚未設定訪視日期，請先設定日期時間（例如輸入：「家訪時間為 10/24 14:00」），然後再輸入「建立行事曆」。"
+            else:
+                try:
+                    from core.calendar_helper import sync_to_calendar
+                    has_event = bool(state.get("googleEventId"))
+                    sync_res = sync_to_calendar(state)
+                    if sync_res.get("success"):
+                        state["googleEventId"] = sync_res.get("event_id")
+                        from core.chatbot import save_session
+                        save_session(user_id, state)
+                        action_str = "更新" if has_event else "建立"
+                        type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
+                        reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}"
+                    else:
+                        reply_msg = f"❌ 同步行事曆失敗：{sync_res.get('error')}"
+                except Exception as e:
+                    logger.error(f"Error building calendar: {e}")
+                    reply_msg = f"❌ 同步行事曆時發生錯誤：{str(e)}"
         elif any(user_text.lower().startswith(prefix) for prefix in [
             "待辦事項：", "待辦事項:", "待辦事項 ",
             "新增待辦：", "新增待辦:", "新增待辦 ",
