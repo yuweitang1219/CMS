@@ -426,8 +426,6 @@ JSON 必須包含以下兩個鍵：
         if has_event and new_date:
             if new_date != old_date:
                 should_sync = True
-            elif new_name != old_name and new_name != "未提供資料":
-                should_sync = True
             elif updated_state.get("visitTime") != state.get("visitTime"):
                 should_sync = True
             elif updated_state.get("planType") != state.get("planType"):
