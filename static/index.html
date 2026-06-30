@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=1.5">
+    <link rel="stylesheet" href="/styles.css?v=1.6">
 </head>
 <body>
     
@@ -299,6 +299,13 @@
                                 💡 請先將該雲端資料夾共用給此服務帳號，並給予編輯者權限：<br><strong id="service-account-email-display" style="color: var(--accent-purple); word-break: break-all;">載入中...</strong>
                             </span>
                         </div>
+                        <div class="input-group">
+                            <label for="google-starting-address">服務起點地址 (選填，用於計算家訪車程)</label>
+                            <input type="text" id="google-starting-address" placeholder="例如：桃園市中壢區健行路229號" autocomplete="off">
+                            <span class="input-helper" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: block;">
+                                💡 當個案也設有地址時，同步行事曆會自動計算以此為起點的開車交通車程。
+                            </span>
+                        </div>
                         <div class="settings-action-row">
                             <a href="https://console.cloud.google.com/" target="_blank" class="link-btn"><i class="fa-solid fa-up-right-from-square"></i> 開啟 Google Cloud Console</a>
                             <button type="submit" class="btn btn-primary">儲存並進行 Google 授權</button>
@@ -431,6 +438,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=1.5"></script>
+    <script src="/app.js?v=1.6"></script>
 </body>
 </html>

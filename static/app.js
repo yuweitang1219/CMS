@@ -719,6 +719,7 @@ async function loadSettings() {
             document.getElementById("google-client-id").value = data.google.client_id || "";
             document.getElementById("google-calendar-id").value = data.google.calendar_id || "primary";
             document.getElementById("google-drive-folder-id").value = data.google.drive_folder_id || "";
+            document.getElementById("google-starting-address").value = data.google.starting_address || "";
             const gConnectedEl = document.getElementById("google-status-connected");
             const gDisconnectedEl = document.getElementById("google-status-disconnected");
             
@@ -769,6 +770,7 @@ async function handleSaveGoogleSettings(event) {
     const clientSecret = document.getElementById("google-client-secret").value.trim();
     const calendarId = document.getElementById("google-calendar-id").value.trim();
     const driveFolderId = document.getElementById("google-drive-folder-id").value.trim();
+    const startingAddress = document.getElementById("google-starting-address").value.trim();
     
     try {
         const response = await fetch("/api/settings/google", {
@@ -778,7 +780,8 @@ async function handleSaveGoogleSettings(event) {
                 client_id: clientId, 
                 client_secret: clientSecret, 
                 calendar_id: calendarId,
-                drive_folder_id: driveFolderId
+                drive_folder_id: driveFolderId,
+                starting_address: startingAddress
             })
         });
         if (response.ok) {

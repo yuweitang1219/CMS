@@ -66,6 +66,36 @@ def get_oauth_service(calendar_id):
         print(f"Error building OAuth service: {e}")
         return None
 
+def get_travel_time(start_addr, end_addr):
+    if not start_addr or not end_addr:
+        return None
+    import requests
+    import urllib.parse
+    try:
+        headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
+        url_start = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(start_addr)}&format=json&limit=1"
+        res_start = requests.get(url_start, headers=headers, timeout=5).json()
+        if not res_start:
+            return None
+        lat_start, lon_start = res_start[0]['lat'], res_start[0]['lon']
+        
+        url_end = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(end_addr)}&format=json&limit=1"
+        res_end = requests.get(url_end, headers=headers, timeout=5).json()
+        if not res_end:
+            return None
+        lat_end, lon_end = res_end[0]['lat'], res_end[0]['lon']
+        
+        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon_start},{lat_start};{lon_end},{lat_end}?overview=false"
+        res_route = requests.get(osrm_url, timeout=5).json()
+        if res_route.get("code") == "Ok" and res_route.get("routes"):
+            duration_sec = res_route["routes"][0]["duration"]
+            duration_min = round(duration_sec / 60)
+            distance_km = round(res_route["routes"][0]["distance"] / 1000, 1)
+            return {"minutes": duration_min, "distance": distance_km}
+    except Exception as e:
+        print(f"Error calculating travel time: {e}")
+    return None
+
 def sync_to_calendar(state):
     """
     Syncs the case visit date to Google Calendar.
@@ -143,6 +173,20 @@ def sync_to_calendar(state):
             end_str = f"{visit_date}T{h+1:02d}:{m:02d}:00"
         except:
             end_str = f"{visit_date}T10:00:00"
+            
+    # Calculate travel time if start and end addresses are configured
+    address = state.get("address", "")
+    start_addr = database.get_setting("google_starting_address", "")
+    
+    travel_time_str = ""
+    travel_info = ""
+    if address and start_addr:
+        travel_res = get_travel_time(start_addr, address)
+        if travel_res:
+            min_val = travel_res["minutes"]
+            km_val = travel_res["distance"]
+            travel_info = f"\n🚗 預估交通車程：約 {min_val} 分鐘 (距離 {km_val} 公里，從服務起點出發)\n"
+            travel_time_str = f"約 {min_val} 分鐘 ({km_val} 公里)"
 
     # Define summary and description based on planType
     if plan_type == "Private":
@@ -156,9 +200,11 @@ def sync_to_calendar(state):
             f"- 計畫類型：{plan_type_name}\n"
             f"- CMS 等級：{cms_lvl} 級\n"
             f"- 疾病史：{conds}\n"
-            f"- 配置服務：{services_str}\n\n"
-            f"此活動由長照 CarePlan LINE 機器人自動同步。"
+            f"- 配置服務：{services_str}\n"
         )
+        if travel_info:
+            description += travel_info
+        description += f"\n此活動由長照 CarePlan LINE 機器人自動同步。"
 
     event_body = {
         'summary': summary,
@@ -175,6 +221,9 @@ def sync_to_calendar(state):
             'useDefault': True,
         },
     }
+    
+    if address:
+        event_body['location'] = address
 
     event_id = state.get("googleEventId")
     try:
@@ -192,7 +241,7 @@ def sync_to_calendar(state):
             
         event_link = event.get('htmlLink')
         new_event_id = event.get('id')
-        return {"success": True, "link": event_link, "event_id": new_event_id}
+        return {"success": True, "link": event_link, "event_id": new_event_id, "travel_time": travel_time_str}
     except Exception as e:
         print(f"Error syncing Google Calendar event: {e}")
         return {"success": False, "error": f"API sync failed: {str(e)}"}

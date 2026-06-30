@@ -108,6 +108,7 @@ class SettingsGoogle(BaseModel):
     client_secret: str
     calendar_id: Optional[str] = "primary"
     drive_folder_id: Optional[str] = ""
+    starting_address: Optional[str] = ""
 
 class SettingsLine(BaseModel):
     channel_access_token: str
@@ -313,6 +314,7 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
     g_email = database.get_setting("google_user_email", "")
     g_connected = bool(database.get_setting("google_refresh_token"))
     g_drive_folder_id = database.get_setting("google_drive_folder_id", "")
+    g_starting_address = database.get_setting("google_starting_address", "")
     
     l_token = database.get_setting("line_channel_access_token", "")
     l_secret = database.get_setting("line_channel_secret", "")
@@ -329,7 +331,8 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
             "calendar_id": g_calendar_id,
             "connected": g_connected,
             "email": g_email,
-            "drive_folder_id": g_drive_folder_id
+            "drive_folder_id": g_drive_folder_id,
+            "starting_address": g_starting_address
         },
         "line": {
             "webhook_url": webhook_url,
@@ -374,6 +377,7 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     database.set_setting("google_client_secret", settings.client_secret)
     database.set_setting("google_calendar_id", clean_cal_id)
     database.set_setting("google_drive_folder_id", settings.drive_folder_id.strip() if settings.drive_folder_id else "")
+    database.set_setting("google_starting_address", settings.starting_address.strip() if settings.starting_address else "")
     
     if credentials_changed:
         # Clear old tokens
@@ -863,7 +867,11 @@ async def line_webhook(request: Request):
                         save_session(user_id, state)
                         action_str = "更新" if has_event else "建立"
                         type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
-                        reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}"
+                        addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
+                        travel_str = ""
+                        if sync_res.get("travel_time"):
+                            travel_str = f"\n🚗 預估車程：{sync_res.get('travel_time')}"
+                        reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}{addr_str}{travel_str}"
                     else:
                         reply_msg = f"❌ 同步行事曆失敗：{sync_res.get('error')}"
                 except Exception as e:
