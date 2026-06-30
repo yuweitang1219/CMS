@@ -1002,10 +1002,14 @@ async def line_webhook(request: Request):
                         preceding_addr = preceding_event.get("location")
                         preceding_summary = preceding_event.get("summary", "")
                         preceding_name = preceding_summary
-                        if "家訪：" in preceding_summary:
-                            preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
-                        elif "家訪:" in preceding_summary:
-                            preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                        if preceding_summary:
+                            parts = preceding_summary.strip().split()
+                            if len(parts) >= 2 and not preceding_summary.startswith("📋"):
+                                preceding_name = parts[0]
+                            elif "家訪：" in preceding_summary:
+                                preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
+                            elif "家訪:" in preceding_summary:
+                                preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
                             
                         starting_addr = database.get_setting("google_starting_address", "")
                         
@@ -1256,10 +1260,14 @@ async def line_webhook(request: Request):
                     case_address = next_event.get("location")
                     summary = next_event.get("summary", "")
                     case_name = summary
-                    if "家訪：" in summary:
-                        case_name = summary.split("家訪：")[1].split(" ")[0].split("(")[0]
-                    elif "家訪:" in summary:
-                        case_name = summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                    if summary:
+                        parts = summary.strip().split()
+                        if len(parts) >= 2 and not summary.startswith("📋"):
+                            case_name = parts[0]
+                        elif "家訪：" in summary:
+                            case_name = summary.split("家訪：")[1].split(" ")[0].split("(")[0]
+                        elif "家訪:" in summary:
+                            case_name = summary.split("家訪:")[1].split(" ")[0].split("(")[0]
                         
                     # Calculate route
                     travel_res = get_travel_time_coords(lat, lon, case_address)

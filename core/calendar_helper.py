@@ -254,12 +254,18 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
                 if closest_event and closest_event.get("location"):
                     start_addr = closest_event.get("location")
                     closest_summary = closest_event.get("summary", "")
-                    if "家訪：" in closest_summary:
-                        source_name = f"個案「{closest_summary.split('家訪：')[1].split(' ')[0].split('(')[0]}」家"
-                    elif "家訪:" in closest_summary:
-                        source_name = f"個案「{closest_summary.split('家訪:')[1].split(' ')[0].split('(')[0]}」家"
+                    if closest_summary:
+                        parts = closest_summary.strip().split()
+                        if len(parts) >= 2 and not closest_summary.startswith("📋"):
+                            source_name = f"個案「{parts[0]}」家"
+                        elif "家訪：" in closest_summary:
+                            source_name = f"個案「{closest_summary.split('家訪：')[1].split(' ')[0].split('(')[0]}」家"
+                        elif "家訪:" in closest_summary:
+                            source_name = f"個案「{closest_summary.split('家訪:')[1].split(' ')[0].split('(')[0]}」家"
+                        else:
+                            source_name = f"「{closest_summary}」"
                     else:
-                        source_name = f"「{closest_summary}」"
+                        source_name = "前置行程"
             except Exception as se:
                 print(f"Error listing calendar events for travel calculation: {se}")
                 
@@ -276,11 +282,22 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
                 travel_time_str = f"約 {min_val} 分鐘 (自{source_name}出發)"
 
     # Define summary and description based on planType
+    brief_type_map = {
+        "AA01": "AA01",
+        "ReEval": "複評",
+        "CoVisit": "共訪",
+        "NewCase": "新案",
+        "PreNewCase": "準新案",
+        "PlanChange": "異動",
+        "Private": "私人"
+    }
+    brief_type = brief_type_map.get(plan_type, plan_type)
+
     if plan_type == "Private":
-        summary = f"📋 私人行程：{name}"
+        summary = f"私人 {name}"
         description = f"私人行程/會議：{name}\n\n此活動由長照 CarePlan LINE 機器人自動同步。"
     else:
-        summary = f"📋 家訪：{name} ({plan_type_name} - CMS {cms_lvl}級)"
+        summary = f"{name} {brief_type}"
         description = (
             f"長照照顧計畫家訪排程：\n"
             f"- 個案姓名：{name}\n"
