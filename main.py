@@ -474,13 +474,13 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
     service, calendar_id = get_calendar_service_from_env()
     if service:
         try:
-            time_min = datetime.utcnow().isoformat() + "Z"
+            time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
             events_result = service.events().list(
                 calendarId=calendar_id,
                 timeMin=time_min,
                 singleEvents=True,
                 orderBy='startTime',
-                maxResults=50
+                maxResults=250
             ).execute()
             return events_result
         except Exception as e:
@@ -492,7 +492,7 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
     if not token:
         return {"error": "not_authorized", "events": []}
         
-    time_min = datetime.utcnow().isoformat() + "Z"
+    time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
     calendar_id = database.get_setting("google_calendar_id", "primary")
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     headers = {"Authorization": f"Bearer {token}"}
@@ -500,7 +500,7 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
         "timeMin": time_min,
         "singleEvents": "true",
         "orderBy": "startTime",
-        "maxResults": 50
+        "maxResults": 250
     }
     
     try:

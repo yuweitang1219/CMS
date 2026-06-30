@@ -137,12 +137,12 @@ async function checkAuthStatus() {
             await fetchTodos();
             await fetchEvents();
             
-            // Start background sync every 10 seconds for real-time updates
+            // Start background sync every 3 seconds for real-time updates
             if (state.syncInterval) clearInterval(state.syncInterval);
             state.syncInterval = setInterval(() => {
                 fetchTodos(false); // fetch silently without resetting UI state
                 fetchEvents(false);
-            }, 10000);
+            }, 3000);
         }
     } catch (error) {
         console.error("Auth check failed:", error);
@@ -222,8 +222,11 @@ async function fetchTodos(showLoading = true) {
     try {
         const response = await fetch("/api/todos");
         if (response.ok) {
-            state.todos = await response.json();
-            renderTodos();
+            const newTodos = await response.json();
+            if (!areTodosEqual(state.todos, newTodos)) {
+                state.todos = newTodos;
+                renderTodos();
+            }
         }
     } catch (error) {
         console.error("Failed to fetch todos:", error);
@@ -390,10 +393,14 @@ async function fetchEvents(showLoading = true) {
         } else if (data.events || data.items) {
             disconnectedEl.classList.add("hidden");
             connectedEl.classList.remove("hidden");
-            state.events = data.items || [];
             updateGoogleBadge(true);
-            renderMiniCalendar();
-            renderEvents();
+            
+            const newEvents = data.items || [];
+            if (!areEventsEqual(state.events, newEvents)) {
+                state.events = newEvents;
+                renderMiniCalendar();
+                renderEvents();
+            }
         }
     } catch (error) {
         console.error("Failed to fetch calendar events:", error);
@@ -927,3 +934,39 @@ document.addEventListener("fullscreenchange", () => {
         }
     }
 });
+
+// Helper to compare if two lists of events are equal
+function areEventsEqual(ev1, ev2) {
+    if (!ev1 || !ev2) return false;
+    if (ev1.length !== ev2.length) return false;
+    for (let i = 0; i < ev1.length; i++) {
+        const e1 = ev1[i];
+        const e2 = ev2[i];
+        if (e1.id !== e2.id ||
+            e1.summary !== e2.summary ||
+            e1.description !== e2.description ||
+            (e1.start?.dateTime || e1.start?.date) !== (e2.start?.dateTime || e2.start?.date) ||
+            (e1.end?.dateTime || e1.end?.date) !== (e2.end?.dateTime || e2.end?.date)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Helper to compare if two lists of todos are equal
+function areTodosEqual(td1, td2) {
+    if (!td1 || !td2) return false;
+    if (td1.length !== td2.length) return false;
+    for (let i = 0; i < td1.length; i++) {
+        const t1 = td1[i];
+        const t2 = td2[i];
+        if (t1.id !== t2.id ||
+            t1.title !== t2.title ||
+            t1.priority !== t2.priority ||
+            t1.due_date !== t2.due_date ||
+            t1.completed !== t2.completed) {
+            return false;
+        }
+    }
+    return true;
+}
