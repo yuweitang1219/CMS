@@ -415,6 +415,38 @@ JSON 必須包含以下兩個鍵：
         
 
 
+        # Check if we should sync to Google Calendar in real-time ONLY IF the event was already created
+        old_date = state.get("visitDate")
+        new_date = updated_state.get("visitDate")
+        old_name = state.get("name")
+        new_name = updated_state.get("name")
+        has_event = bool(state.get("googleEventId"))
+        
+        should_sync = False
+        if has_event and new_date:
+            if new_date != old_date:
+                should_sync = True
+            elif new_name != old_name and new_name != "未提供資料":
+                should_sync = True
+            elif updated_state.get("visitTime") != state.get("visitTime"):
+                should_sync = True
+            elif updated_state.get("planType") != state.get("planType"):
+                should_sync = True
+                
+        import database
+        import os
+        has_oauth = bool(database.get_setting("google_refresh_token"))
+        has_service_account = bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON"))
+        if should_sync and (has_oauth or has_service_account):
+            try:
+                from .calendar_helper import sync_to_calendar
+                sync_res = sync_to_calendar(updated_state)
+                if sync_res.get("success"):
+                    updated_state["googleEventId"] = sync_res.get("event_id")
+                    reply_text += "\n\n📅 已為您自動同步更新 Google 行事曆行程！"
+            except Exception as se:
+                print("Error syncing to calendar during process_chat:", se)
+
         # Save updated history in state
         history.append({"role": "assistant", "content": reply_text})
         updated_state["_history"] = history
