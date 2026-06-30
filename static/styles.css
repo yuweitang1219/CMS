@@ -263,9 +263,10 @@ input:focus, select:focus, textarea:focus {
 
 /* Main Dashboard Layout */
 .dashboard-container {
-    padding: 20px 40px;
-    max-width: 1600px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: none;
+    padding: 20px;
+    margin: 0;
     display: flex;
     flex-direction: column;
     min-height: 100vh;
@@ -924,23 +925,14 @@ input:focus, select:focus, textarea:focus {
 
 /* Internal Day Elements */
 .day-number {
-    font-size: 1.05rem;
+    font-size: 1.3rem;
     font-weight: 700;
     margin-bottom: 6px;
     display: inline-block;
 }
 
-.day-events-container {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    overflow-y: auto;
-    max-height: 65px;
-}
-
 .day-event-item {
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     font-weight: 600;
     padding: 3px 6px;
     background: rgba(99, 102, 241, 0.12);
@@ -1014,16 +1006,16 @@ input:focus, select:focus, textarea:focus {
 
 .event-title {
     font-weight: 600;
-    font-size: 1.1rem;
+    font-size: 1.3rem;
 }
 
 .event-desc {
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: var(--text-secondary);
 }
 
 .event-time {
-    font-size: 0.85rem;
+    font-size: 1rem;
     color: var(--accent-cyan);
     font-weight: 600;
     display: flex;
