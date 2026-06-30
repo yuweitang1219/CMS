@@ -595,38 +595,46 @@ function getEventsOnDay(date) {
 function renderEvents() {
     const listEl = document.getElementById("events-list");
     const emptyEl = document.getElementById("events-list-empty");
+    const eventsContainer = document.querySelector('.events-timeline');
+    const todoContainer = document.querySelector('.todo-card');
     listEl.innerHTML = "";
-    
+
     // Filter events for selected day
     const dayEvents = state.events.filter(event => {
         const start = event.start.dateTime || event.start.date;
         const eventDate = new Date(start);
         return eventDate.toDateString() === state.selectedDate.toDateString();
     });
-    
+
     if (dayEvents.length === 0) {
-        emptyEl.classList.remove("hidden");
+        // No upcoming events: show todo list instead
+        eventsContainer.classList.add('hidden');
+        todoContainer.classList.remove('hidden');
+        emptyEl.classList.add('hidden'); // hide events empty placeholder
+        renderTodos();
     } else {
-        emptyEl.classList.add("hidden");
-        
+        // Show events and hide todo section
+        eventsContainer.classList.remove('hidden');
+        todoContainer.classList.add('hidden');
+        emptyEl.classList.add('hidden');
         dayEvents.forEach(event => {
             const div = document.createElement("div");
             div.className = "event-item";
-            
+
             // Format time range
             let timeStr = "整天";
             if (event.start.dateTime) {
                 const start = new Date(event.start.dateTime);
                 const end = new Date(event.end.dateTime);
-                
+
                 const startHour = String(start.getHours()).padStart(2, '0');
                 const startMin = String(start.getMinutes()).padStart(2, '0');
                 const endHour = String(end.getHours()).padStart(2, '0');
                 const endMin = String(end.getMinutes()).padStart(2, '0');
-                
+
                 timeStr = `${startHour}:${startMin} - ${endHour}:${endMin}`;
             }
-            
+
             div.innerHTML = `
                 <div class="event-item-left">
                     <span class="event-title">${escapeHTML(event.summary)}</span>

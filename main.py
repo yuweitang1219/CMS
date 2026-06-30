@@ -1023,7 +1023,7 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error generating plan: {e}")
                     reply_msg = f"生成計畫書時發生錯誤：{str(e)}\n請確認個案資料是否完整，或輸入「重新開始」重試。"
-        elif user_text in ["建立行事曆", "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", "建立行程"]:
+        elif user_text in ["建立行事曆", "新增行事曆", "加入行事曆", "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", "建立行程", "新增行程", "加入行程", "排程", "加行程"]:
             state = load_session(user_id)
             if state.get("name") == "未提供資料":
                 reply_msg = "⚠️ 尚未開始建立個案，請先輸入個案的姓名（如「個案名字是張三」）以開始建立資料！"

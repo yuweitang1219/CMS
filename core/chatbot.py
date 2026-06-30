@@ -406,9 +406,28 @@ JSON 必須包含以下兩個鍵：
 
 請開始執行。
 """
+    # Models to try in order (fallback if one is unavailable)
+    MODELS_TO_TRY = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-flash-latest',
+    ]
+    
     try:
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        response = model.generate_content(prompt)
+        response = None
+        last_model_error = None
+        for model_name in MODELS_TO_TRY:
+            try:
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                break  # success, stop trying
+            except Exception as model_err:
+                print(f"Model {model_name} failed: {model_err}")
+                last_model_error = model_err
+        
+        if response is None:
+            raise last_model_error
+        
         text = response.text.strip()
         
         # Strip code block wrappers if any
@@ -419,6 +438,13 @@ JSON 必須包含以下兩個鍵：
             last_bt = text.rfind("```")
             if first_nl != -1 and last_bt != -1:
                 text = text[first_nl:last_bt].strip()
+        
+        # Try to extract JSON if there's extra text around it
+        if not text.startswith("{"):
+            import re
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(0)
         
         data = json.loads(text)
         updated_state = data.get("updated_state", state)
