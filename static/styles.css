@@ -860,13 +860,13 @@ input:focus, select:focus, textarea:focus {
 
 .mini-day {
     position: relative;
-    min-height: 80px;
+    min-height: 90px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
     padding: 6px;
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     font-weight: 600;
     border-radius: 8px;
     cursor: pointer;
@@ -924,7 +924,7 @@ input:focus, select:focus, textarea:focus {
 
 /* Internal Day Elements */
 .day-number {
-    font-size: 0.85rem;
+    font-size: 1.05rem;
     font-weight: 700;
     margin-bottom: 6px;
     display: inline-block;
@@ -940,9 +940,9 @@ input:focus, select:focus, textarea:focus {
 }
 
 .day-event-item {
-    font-size: 0.65rem;
-    font-weight: 500;
-    padding: 2px 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 3px 6px;
     background: rgba(99, 102, 241, 0.12);
     border-left: 2.5px solid var(--accent-purple);
     color: var(--accent-purple);
@@ -1014,16 +1014,16 @@ input:focus, select:focus, textarea:focus {
 
 .event-title {
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 1.1rem;
 }
 
 .event-desc {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     color: var(--text-secondary);
 }
 
 .event-time {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: var(--accent-cyan);
     font-weight: 600;
     display: flex;
