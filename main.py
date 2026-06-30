@@ -12,6 +12,7 @@ import auth
 import line_bot
 import requests
 import json
+import urllib.parse
 
 # Import Line SDK v3 components
 from linebot.v3 import WebhookHandler
