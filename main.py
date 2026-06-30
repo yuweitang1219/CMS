@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 import os
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Response
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Response, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -526,10 +526,66 @@ def oauth2callback(code: str, request: Request):
         logger.error(f"Error during OAuth callback: {e}")
         return HTMLResponse(f"OAuth error: {e}", status_code=500)
 
-# --- GOOGLE CALENDAR PROXY API (PROTECTED) ---
+def get_cleaned_summary(summary, location=""):
+    if not summary:
+        return None
+    # Check if it has emoji or old format structure
+    if not (summary.startswith("📋") or "家訪：" in summary or "家訪:" in summary or "私人行程" in summary):
+        return None
+        
+    clean = summary.replace("📋", "").strip()
+    
+    # Private event cleanup
+    if "私人行程：" in clean or "私人行程:" in clean:
+        content = clean.replace("私人行程：", "").replace("私人行程:", "").strip()
+        loc_str = f" ({location})" if location and location not in content else ""
+        return f"私人 {content}{loc_str}"
+        
+    # Care plan event cleanup
+    if "家訪：" in clean or "家訪:" in clean:
+        part = clean.split("家訪：")[1] if "家訪：" in clean else clean.split("家訪:")[1]
+        part = part.strip()
+        name = part.split("(")[0].split(" ")[0].strip()
+        
+        type_code = "AA01"
+        if "(" in part:
+            inside = part.split("(")[1].split(")")[0]
+            if "AA01" in inside: type_code = "AA01"
+            elif "複評" in inside or "ReEval" in inside: type_code = "複評"
+            elif "共訪" in inside or "CoVisit" in inside: type_code = "共訪"
+            elif "新案" in inside or "NewCase" in inside: type_code = "新案"
+            elif "準新案" in inside or "PreNewCase" in inside: type_code = "準新案"
+            elif "計畫異動" in inside or "PlanChange" in inside: type_code = "異動"
+            else:
+                type_code = inside.split(" ")[0].strip()
+        return f"{name} {type_code}"
+    return None
+
+def update_calendar_event_summary_bg(service, calendar_id, event_id, new_summary):
+    try:
+        service.events().patch(
+            calendarId=calendar_id,
+            eventId=event_id,
+            body={"summary": new_summary}
+        ).execute()
+        logger.info(f"Background task: Automatically updated event {event_id} summary to '{new_summary}'")
+    except Exception as e:
+        logger.error(f"Failed to update event {event_id} in background: {e}")
+
+def update_oauth_calendar_event_summary_bg(token, calendar_id, event_id, new_summary):
+    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{event_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        res = requests.patch(url, headers=headers, json={"summary": new_summary}, timeout=10)
+        logger.info(f"Background OAuth task: Updated event {event_id} summary to '{new_summary}', status: {res.status_code}")
+    except Exception as e:
+        logger.error(f"Failed to update OAuth event {event_id} in background: {e}")
 
 @app.get("/api/calendar/events")
-def list_calendar_events(current_user: str = Depends(get_current_user)):
+def list_calendar_events(background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     # 1. Try Service Account first (stateless env mode)
     service, calendar_id = get_calendar_service_from_env()
     if service:
@@ -542,6 +598,21 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
                 orderBy='startTime',
                 maxResults=1000
             ).execute()
+            
+            # Clean up old summaries in the background
+            items = events_result.get('items', [])
+            for ev in items:
+                old_summary = ev.get("summary", "")
+                new_summary = get_cleaned_summary(old_summary, ev.get("location", ""))
+                if new_summary and new_summary != old_summary:
+                    ev["summary"] = new_summary
+                    background_tasks.add_task(
+                        update_calendar_event_summary_bg,
+                        service,
+                        calendar_id,
+                        ev["id"],
+                        new_summary
+                    )
             return events_result
         except Exception as e:
             logger.error(f"Error listing events via Service Account: {e}")
@@ -566,7 +637,21 @@ def list_calendar_events(current_user: str = Depends(get_current_user)):
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
         if response.status_code == 200:
-            return response.json()
+            events_data = response.json()
+            items = events_data.get('items', [])
+            for ev in items:
+                old_summary = ev.get("summary", "")
+                new_summary = get_cleaned_summary(old_summary, ev.get("location", ""))
+                if new_summary and new_summary != old_summary:
+                    ev["summary"] = new_summary
+                    background_tasks.add_task(
+                        update_oauth_calendar_event_summary_bg,
+                        token,
+                        calendar_id,
+                        ev["id"],
+                        new_summary
+                    )
+            return events_data
         elif response.status_code == 401:
             return {"error": "unauthorized_by_google", "events": []}
         else:

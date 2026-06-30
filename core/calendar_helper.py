@@ -294,8 +294,9 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     brief_type = brief_type_map.get(plan_type, plan_type)
 
     if plan_type == "Private":
-        summary = f"私人 {name}"
-        description = f"私人行程/會議：{name}\n\n此活動由長照 CarePlan LINE 機器人自動同步。"
+        loc_str = f" ({address})" if address else ""
+        summary = f"私人 {name}{loc_str}"
+        description = f"私人行程/會議：{name}\n地點：{address or '無'}\n\n此活動由長照 CarePlan LINE 機器人自動同步。"
     else:
         summary = f"{name} {brief_type}"
         description = (
