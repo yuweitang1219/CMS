@@ -879,8 +879,57 @@ async def line_webhook(request: Request):
                 )
             return
             
-        # Check if there is a pending calendar choice
+        # Check if there is a pending calendar confirmation (是/否)
         state = load_session(user_id)
+        pending_confirm = state.get("pending_calendar_confirm")
+        if pending_confirm and user_text in ["是", "好", "確認", "對", "yes", "YES", "加入", "同步", "確定"]:
+            # User confirmed — proceed with calendar sync
+            state["pending_calendar_confirm"] = None
+            try:
+                from core.calendar_helper import sync_to_calendar
+                from core.chatbot import save_session as _save
+                has_event = bool(state.get("googleEventId"))
+                sync_res = sync_to_calendar(state)
+                if sync_res.get("success"):
+                    state["googleEventId"] = sync_res.get("event_id")
+                    _save(user_id, state)
+                    action_str = "更新" if has_event else "建立"
+                    type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
+                    addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
+                    travel_str = f"\n🚗 預估車程：{sync_res.get('travel_time')}" if sync_res.get("travel_time") else ""
+                    reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}{addr_str}{travel_str}"
+                else:
+                    _save(user_id, state)
+                    reply_msg = f"❌ 同步行事曆失敗：{sync_res.get('error')}"
+            except Exception as e:
+                logger.error(f"Error confirming calendar sync: {e}")
+                reply_msg = f"❌ 同步行事曆時發生錯誤：{str(e)}"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+        elif pending_confirm and user_text in ["否", "不用", "不要", "取消", "no", "NO", "算了"]:
+            # User cancelled
+            state["pending_calendar_confirm"] = None
+            from core.chatbot import save_session as _save
+            _save(user_id, state)
+            reply_msg = "✅ 已取消，行程不會加入 Google 行事曆。"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+
+        # Check if there is a pending calendar choice (1/2 for start point)
         pending_choice = state.get("pending_calendar_choice")
         if pending_choice and user_text in ["1", "2", "一", "二"]:
             choice = "1" if user_text in ["1", "一"] else "2"
@@ -1132,24 +1181,24 @@ async def line_webhook(request: Request):
                                     )
                                 )
                             return
-                            
-                    # Default calendar sync
-                    from core.calendar_helper import sync_to_calendar
-                    has_event = bool(state.get("googleEventId"))
-                    sync_res = sync_to_calendar(state)
-                    if sync_res.get("success"):
-                        state["googleEventId"] = sync_res.get("event_id")
-                        from core.chatbot import save_session
-                        save_session(user_id, state)
-                        action_str = "更新" if has_event else "建立"
-                        type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
-                        addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
-                        travel_str = ""
-                        if sync_res.get("travel_time"):
-                            travel_str = f"\n🚗 預估車程：{sync_res.get('travel_time')}"
-                        reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}{addr_str}{travel_str}"
-                    else:
-                        reply_msg = f"❌ 同步行事曆失敗：{sync_res.get('error')}"
+                    
+                    # No preceding event — ask for confirmation before syncing
+                    type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
+                    addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
+                    action_str = "更新" if state.get("googleEventId") else "新增"
+                    
+                    state["pending_calendar_confirm"] = True
+                    from core.chatbot import save_session
+                    save_session(user_id, state)
+                    
+                    reply_msg = (
+                        f"📅 確認要將以下行程{action_str}至 Google 行事曆嗎？\n\n"
+                        f"• 類型：{type_str}\n"
+                        f"• 對象：{state.get('name')}\n"
+                        f"• 時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}"
+                        f"{addr_str}\n\n"
+                        f"👉 請回覆「是」確認，或「否」取消。"
+                    )
                 except Exception as e:
                     logger.error(f"Error building calendar: {e}")
                     reply_msg = f"❌ 同步行事曆時發生錯誤：{str(e)}"
