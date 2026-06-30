@@ -40,6 +40,43 @@ logger = logging.getLogger("app")
 
 app = FastAPI(title="Google Calendar & To-Do Dashboard")
 
+# Keep-alive background thread to prevent Render sleep
+import threading
+import time
+import requests
+
+def keep_alive_ping():
+    # Wait for the server to fully start
+    time.sleep(15)
+    
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not render_url:
+        try:
+            line_webhook = database.get_setting("line_webhook_url", "")
+            if line_webhook and "https://" in line_webhook:
+                render_url = line_webhook.split("/api/line/webhook")[0]
+        except Exception:
+            pass
+            
+    if not render_url:
+        logger.info("Keep-alive task: RENDER_EXTERNAL_URL or line_webhook_url not found. Skipping self-pings.")
+        return
+        
+    logger.info(f"Keep-alive task started. Target URL: {render_url}")
+    while True:
+        try:
+            res = requests.get(render_url, timeout=15)
+            logger.info(f"Keep-alive ping to {render_url} returned status: {res.status_code}")
+        except Exception as e:
+            logger.error(f"Keep-alive ping failed: {e}")
+        # Sleep for 10 minutes (600 seconds)
+        time.sleep(600)
+
+@app.on_event("startup")
+def startup_event():
+    t = threading.Thread(target=keep_alive_ping, daemon=True)
+    t.start()
+
 # Auto-populate admin user from environment variables if not present in DB
 admin_user = os.environ.get("ADMIN_USERNAME", "yuwei1112")
 admin_pass = os.environ.get("ADMIN_PASSWORD")
