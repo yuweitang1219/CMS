@@ -26,7 +26,8 @@ from linebot.v3.messaging import (
 )
 from linebot.v3.webhooks import (
     MessageEvent,
-    TextMessageContent
+    TextMessageContent,
+    LocationMessageContent
 )
 
 # Import CarePlan Chatbot engine
@@ -756,6 +757,56 @@ async def line_webhook(request: Request):
                 )
             return
             
+        # Check if there is a pending calendar choice
+        state = load_session(user_id)
+        pending_choice = state.get("pending_calendar_choice")
+        if pending_choice and user_text in ["1", "2", "一", "二"]:
+            choice = "1" if user_text in ["1", "一"] else "2"
+            preceding_addr = pending_choice.get("preceding_addr")
+            preceding_name = pending_choice.get("preceding_name")
+            starting_addr = pending_choice.get("starting_addr")
+            
+            # Remove pending flag
+            state["pending_calendar_choice"] = None
+            
+            try:
+                from core.calendar_helper import sync_to_calendar
+                if choice == "1":
+                    sync_res = sync_to_calendar(state, override_start_address=preceding_addr, override_source_name=f"個案「{preceding_name}」家")
+                else:
+                    sync_res = sync_to_calendar(state, override_start_address=starting_addr, override_source_name="服務起點")
+                    
+                if sync_res.get("success"):
+                    state["googleEventId"] = sync_res.get("event_id")
+                    from core.chatbot import save_session
+                    save_session(user_id, state)
+                    
+                    action_str = "更新" if state.get("googleEventId") else "建立"
+                    type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
+                    addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
+                    travel_str = ""
+                    if sync_res.get("travel_time"):
+                        travel_str = f"\n🚗 預估車程：{sync_res.get('travel_time')}"
+                        
+                    reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}{addr_str}{travel_str}"
+                else:
+                    from core.chatbot import save_session
+                    save_session(user_id, state) # save state with cleared flag anyway
+                    reply_msg = f"❌ 同同步行事曆失敗：{sync_res.get('error')}"
+            except Exception as e:
+                logger.error(f"Error handling calendar choice: {e}")
+                reply_msg = f"❌ 同同步行事曆時發生錯誤：{str(e)}"
+                
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+            
         reply_msg = ""
         
         # Process command keyword matching
@@ -858,6 +909,105 @@ async def line_webhook(request: Request):
                 reply_msg = "⚠️ 尚未設定訪視日期，請先設定日期時間（例如輸入：「家訪時間為 10/24 14:00」），然後再輸入「建立行事曆」。"
             else:
                 try:
+                    # Let's check for same-day preceding events first
+                    from core.calendar_helper import get_oauth_service, get_calendar_service_from_env
+                    oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
+                    service = get_oauth_service(oauth_calendar_id)
+                    if service:
+                        calendar_id = oauth_calendar_id
+                    else:
+                        service, calendar_id = get_calendar_service_from_env()
+                        
+                    preceding_event = None
+                    if service and state.get("visitDate") and state.get("address"):
+                        try:
+                            visit_date = state.get("visitDate")
+                            visit_time = state.get("visitTime", "09:00")
+                            from datetime import datetime
+                            current_dt = datetime.fromisoformat(f"{visit_date}T{visit_time}:00")
+                            
+                            time_min = f"{visit_date}T00:00:00Z"
+                            time_max = f"{visit_date}T23:59:59Z"
+                            events_result = service.events().list(
+                                calendarId=calendar_id,
+                                timeMin=time_min,
+                                timeMax=time_max,
+                                singleEvents=True,
+                                orderBy='startTime'
+                            ).execute()
+                            events = events_result.get('items', [])
+                            
+                            min_diff = None
+                            for ev in events:
+                                if ev.get("id") == state.get("googleEventId"):
+                                    continue
+                                ev_start = ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+                                if not ev_start:
+                                    continue
+                                try:
+                                    if ev_start.endswith("Z"):
+                                        ev_dt = datetime.fromisoformat(ev_start[:-1])
+                                    else:
+                                        ev_dt = datetime.fromisoformat(ev_start)
+                                    ev_dt = ev_dt.replace(tzinfo=None)
+                                    
+                                    diff_sec = (current_dt - ev_dt).total_seconds()
+                                    if 0 <= diff_sec <= 90 * 60:
+                                        if min_diff is None or diff_sec < min_diff:
+                                            min_diff = diff_sec
+                                            preceding_event = ev
+                                except Exception:
+                                    pass
+                        except Exception as se:
+                            logger.error(f"Error checking preceding event: {se}")
+                            
+                    if preceding_event and preceding_event.get("location"):
+                        preceding_addr = preceding_event.get("location")
+                        preceding_summary = preceding_event.get("summary", "")
+                        preceding_name = preceding_summary
+                        if "家訪：" in preceding_summary:
+                            preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
+                        elif "家訪:" in preceding_summary:
+                            preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                            
+                        starting_addr = database.get_setting("google_starting_address", "")
+                        
+                        from core.calendar_helper import get_travel_time
+                        t_preceding = get_travel_time(preceding_addr, state.get("address"))
+                        t_starting = get_travel_time(starting_addr, state.get("address")) if starting_addr else None
+                        
+                        if t_preceding:
+                            min_p = t_preceding["minutes"]
+                            km_p = t_preceding["distance"]
+                            min_s = t_starting["minutes"] if t_starting else "?"
+                            km_s = t_starting["distance"] if t_starting else "?"
+                            
+                            state["pending_calendar_choice"] = {
+                                "preceding_addr": preceding_addr,
+                                "preceding_name": preceding_name,
+                                "starting_addr": starting_addr
+                            }
+                            from core.chatbot import save_session
+                            save_session(user_id, state)
+                            
+                            reply_msg = (
+                                f"📅 偵測到當日前置個案「{preceding_name}」。\n"
+                                f"請問本次訪視行程的交通車程要以哪一個為起點計算？\n\n"
+                                f"1️⃣ 從前一個案「{preceding_name}」出發：約 {min_p} 分鐘 ({km_p} 公里)\n"
+                                f"2️⃣ 從服務起點（診所）出發：約 {min_s} 分鐘 ({km_s} 公里)\n\n"
+                                f"👉 請直接回覆 1 或 2，系統會依您的選擇建立日曆行程。"
+                            )
+                            with ApiClient(configuration) as api_client:
+                                line_bot_api = MessagingApi(api_client)
+                                line_bot_api.reply_message(
+                                    ReplyMessageRequest(
+                                        reply_token=event.reply_token,
+                                        messages=[TextMessage(text=reply_msg)]
+                                    )
+                                )
+                            return
+                            
+                    # Default calendar sync
                     from core.calendar_helper import sync_to_calendar
                     has_event = bool(state.get("googleEventId"))
                     sync_res = sync_to_calendar(state)
@@ -1009,6 +1159,117 @@ async def line_webhook(request: Request):
                 )
         except Exception as se:
             logger.error(f"Error sending Line message: {se}")
+
+    @handler.add(MessageEvent, message=LocationMessageContent)
+    def handle_location(event):
+        user_id = event.source.user_id
+        
+        # Check authorization
+        if authorized_user_id and user_id != authorized_user_id:
+            logger.warning(f"Line location message from unauthorized user ID: {user_id}")
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text="⚠️ 系統錯誤：此帳號未獲得授權，無法使用本長照 AI 助理。")]
+                    )
+                )
+            return
+            
+        lat = event.message.latitude
+        lon = event.message.longitude
+        address = event.message.address
+        
+        # Look for the next upcoming event on Google Calendar today
+        from core.calendar_helper import get_oauth_service, get_calendar_service_from_env, get_travel_time_coords
+        oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
+        service = get_oauth_service(oauth_calendar_id)
+        if not service:
+            service, calendar_id = get_calendar_service_from_env()
+        else:
+            calendar_id = oauth_calendar_id
+            
+        reply_text = ""
+        if service:
+            try:
+                import datetime
+                today_str = datetime.date.today().isoformat()
+                time_min = datetime.datetime.utcnow().isoformat() + "Z"
+                time_max = f"{today_str}T23:59:59Z"
+                
+                events_result = service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents=True,
+                    orderBy='startTime',
+                    maxResults=5
+                ).execute()
+                events = events_result.get('items', [])
+                
+                next_event = None
+                for ev in events:
+                    ev_start = ev.get("start", {}).get("dateTime")
+                    if ev_start and ev.get("location"):
+                        next_event = ev
+                        break
+                        
+                if next_event:
+                    case_address = next_event.get("location")
+                    summary = next_event.get("summary", "")
+                    case_name = summary
+                    if "家訪：" in summary:
+                        case_name = summary.split("家訪：")[1].split(" ")[0].split("(")[0]
+                    elif "家訪:" in summary:
+                        case_name = summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                        
+                    # Calculate route
+                    travel_res = get_travel_time_coords(lat, lon, case_address)
+                    if travel_res:
+                        min_val = travel_res["minutes"]
+                        km_val = travel_res["distance"]
+                        reply_text = (
+                            f"📍 收到您的目前定位！\n\n"
+                            f"🚗 距離下一個預約個案「{case_name}」的住家（{case_address}）：\n"
+                            f"👉 開車車程約 {min_val} 分鐘 (距離 {km_val} 公里)"
+                        )
+                    else:
+                        reply_text = (
+                            f"📍 收到您的目前定位：{address}\n"
+                            f"🏠 下一個個案為「{case_name}」，住家：{case_address}\n"
+                            f"（暫時無法估算車程距離，請確認地圖服務是否正常）"
+                        )
+            except Exception as se:
+                logger.error(f"Error checking next calendar event for location reply: {se}")
+                
+        # Fallback to current session case if no calendar event or calendar error
+        if not reply_text:
+            state = load_session(user_id)
+            case_name = state.get("name", "未提供資料")
+            case_address = state.get("address", "")
+            if case_name != "未提供資料" and case_address:
+                travel_res = get_travel_time_coords(lat, lon, case_address)
+                if travel_res:
+                    min_val = travel_res["minutes"]
+                    km_val = travel_res["distance"]
+                    reply_text = (
+                        f"📍 收到您的目前定位！\n\n"
+                        f"🚗 距離當前對話個案「{case_name}」的住家（{case_address}）：\n"
+                        f"👉 開車車程約 {min_val} 分鐘 (距離 {km_val} 公里)"
+                    )
+                    
+        if not reply_text:
+            reply_text = f"📍 收到您的目前定位：\n{address}\n\n（今日接下來無安排日曆行程，且目前無記錄中的個案地址，無法進行導航估計）"
+            
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                )
+            )
 
     try:
         handler.handle(body_str, signature)

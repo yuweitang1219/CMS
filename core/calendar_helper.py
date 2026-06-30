@@ -96,7 +96,31 @@ def get_travel_time(start_addr, end_addr):
         print(f"Error calculating travel time: {e}")
     return None
 
-def sync_to_calendar(state):
+def get_travel_time_coords(lat_start, lon_start, end_addr):
+    if not lat_start or not lon_start or not end_addr:
+        return None
+    import requests
+    import urllib.parse
+    try:
+        headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
+        url_end = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(end_addr)}&format=json&limit=1"
+        res_end = requests.get(url_end, headers=headers, timeout=5).json()
+        if not res_end:
+            return None
+        lat_end, lon_end = res_end[0]['lat'], res_end[0]['lon']
+        
+        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon_start},{lat_start};{lon_end},{lat_end}?overview=false"
+        res_route = requests.get(osrm_url, timeout=5).json()
+        if res_route.get("code") == "Ok" and res_route.get("routes"):
+            duration_sec = res_route["routes"][0]["duration"]
+            duration_min = round(duration_sec / 60)
+            distance_km = round(res_route["routes"][0]["distance"] / 1000, 1)
+            return {"minutes": duration_min, "distance": distance_km}
+    except Exception as e:
+        print(f"Error calculating travel time from coordinates: {e}")
+    return None
+
+def sync_to_calendar(state, override_start_address=None, override_source_name=None):
     """
     Syncs the case visit date to Google Calendar.
     Tries Google OAuth first, then falls back to GOOGLE_SERVICE_ACCOUNT_JSON.
@@ -176,17 +200,80 @@ def sync_to_calendar(state):
             
     # Calculate travel time if start and end addresses are configured
     address = state.get("address", "")
-    start_addr = database.get_setting("google_starting_address", "")
+    event_id = state.get("googleEventId")
     
     travel_time_str = ""
     travel_info = ""
-    if address and start_addr:
-        travel_res = get_travel_time(start_addr, address)
-        if travel_res:
-            min_val = travel_res["minutes"]
-            km_val = travel_res["distance"]
-            travel_info = f"\n🚗 預估交通車程：約 {min_val} 分鐘 (距離 {km_val} 公里，從服務起點出發)\n"
-            travel_time_str = f"約 {min_val} 分鐘 ({km_val} 公里)"
+    if address:
+        start_addr = None
+        source_name = ""
+        
+        if override_start_address:
+            start_addr = override_start_address
+            source_name = override_source_name or "選定起點"
+        else:
+            # Query calendar events on the same day to find preceding events within 1.5h
+            try:
+                time_min = f"{visit_date}T00:00:00Z"
+                time_max = f"{visit_date}T23:59:59Z"
+                events_result = service.events().list(
+                    calendarId=calendar_id,
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+                events = events_result.get('items', [])
+                
+                closest_event = None
+                min_diff = None
+                current_dt = start_dt.replace(tzinfo=None) if hasattr(start_dt, 'tzinfo') else start_dt
+                
+                for ev in events:
+                    if ev.get("id") == event_id:
+                        continue
+                    ev_start = ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+                    if not ev_start:
+                        continue
+                    try:
+                        if ev_start.endswith("Z"):
+                            ev_dt = datetime.fromisoformat(ev_start[:-1])
+                        else:
+                            ev_dt = datetime.fromisoformat(ev_start)
+                        ev_dt = ev_dt.replace(tzinfo=None)
+                        
+                        # Diff in seconds (current start - preceding start)
+                        diff_sec = (current_dt - ev_dt).total_seconds()
+                        if 0 <= diff_sec <= 90 * 60:  # Within 90 minutes (1.5 hours)
+                            if min_diff is None or diff_sec < min_diff:
+                                min_diff = diff_sec
+                                closest_event = ev
+                    except Exception as pe:
+                        print(f"Error parsing event time during preceding search: {pe}")
+                
+                if closest_event and closest_event.get("location"):
+                    start_addr = closest_event.get("location")
+                    closest_summary = closest_event.get("summary", "")
+                    if "家訪：" in closest_summary:
+                        source_name = f"個案「{closest_summary.split('家訪：')[1].split(' ')[0].split('(')[0]}」家"
+                    elif "家訪:" in closest_summary:
+                        source_name = f"個案「{closest_summary.split('家訪:')[1].split(' ')[0].split('(')[0]}」家"
+                    else:
+                        source_name = f"「{closest_summary}」"
+            except Exception as se:
+                print(f"Error listing calendar events for travel calculation: {se}")
+                
+            if not start_addr:
+                start_addr = database.get_setting("google_starting_address", "")
+                source_name = "服務起點"
+                
+        if start_addr:
+            travel_res = get_travel_time(start_addr, address)
+            if travel_res:
+                min_val = travel_res["minutes"]
+                km_val = travel_res["distance"]
+                travel_info = f"\n🚗 預估交通車程：約 {min_val} 分鐘 (距離 {km_val} 公里，自{source_name}出發)\n"
+                travel_time_str = f"約 {min_val} 分鐘 (自{source_name}出發)"
 
     # Define summary and description based on planType
     if plan_type == "Private":
@@ -225,7 +312,6 @@ def sync_to_calendar(state):
     if address:
         event_body['location'] = address
 
-    event_id = state.get("googleEventId")
     try:
         if event_id:
             try:
