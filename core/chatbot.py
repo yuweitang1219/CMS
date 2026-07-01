@@ -41,6 +41,7 @@ def get_default_state():
         "birthYear": "1940",
         "familyName": "未提供資料",
         "familyRel": "未提供資料",
+        "familyPhone": "",              # 主要聯絡人電話
         "visitDate": today,
         "visitTime": "09:00",  # 訪視時間，格式為 HH:MM
         "statusVal": "1",  # 1=一般, 2=中低收, 3=低收
@@ -58,6 +59,7 @@ def get_default_state():
         "adlData": {},
         "iadlData": {},
         "familyStatusVal": "無",
+        "familyStatusPhone": "",        # 其他成員電話
         "activeServices": [],
         "serviceTimes": {},
         "customPrices": {},
@@ -296,6 +298,7 @@ def process_chat(user_id, user_message, api_key):
 2. 出生年 (birthYear): 西元年份字串 (如 "1948")
 3. 家屬姓名 (familyName): 字串
 4. 關係 (familyRel): 字串
+4a. 主要聯絡人電話 (familyPhone): 字串，例如 "0918-596-286" 等。請從輸入中提取與該主要聯絡人（如二女兒劉小姐）相關聯的電話。
 5. 家訪日期 (visitDate): 格式為 YYYY-MM-DD
 6. 身分別 (statusVal):
    - "1": 第三級 (一般戶)
@@ -321,6 +324,7 @@ def process_chat(user_id, user_message, api_key):
     - 值為: "獨立", "部分協助", "完全依賴" (若不需協助則為空或不列出)。
     - **備註與細節保留規則 (重要)**：同 ADL，如果個管師輸入時有括號備註，必須完整保留整段文字（包含括號內容）作為值，不可裁剪。
 20. 其他家庭成員 (familyStatusVal): 字串，指除了主要照顧者之外的其他家庭成員（如「無」、「長女」或「次子」等）。請僅列出成員名稱或關係，絕對不可以填寫經濟支持、照顧細節或其他描述性內容。
+20a. 其他成員電話 (familyStatusPhone): 字串，例如 "0936-979-996" 等。請從輸入中提取與其他家庭成員（如大女兒）相關聯的電話。
 21. 計畫類型 (planType): 必須為以下之一:
     - "AA01": 當個管師說「AA01」、「家訪」、「定期追蹤」時使用
     - "ReEval": 當個管師說「複評」、「重新評定」時使用

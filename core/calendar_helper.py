@@ -293,6 +293,12 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     }
     brief_type = brief_type_map.get(plan_type, plan_type)
 
+    family_phone = state.get("familyPhone", "")
+    family_status_phone = state.get("familyStatusPhone", "")
+    family_name = state.get("familyName", "")
+    family_rel = state.get("familyRel", "")
+    family_status_val = state.get("familyStatusVal", "")
+
     if plan_type == "Private":
         loc_str = f" ({address})" if address else ""
         summary = f"私人 {name}{loc_str}"
@@ -303,6 +309,15 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
             f"長照照顧計畫家訪排程：\n"
             f"- 個案姓名：{name}\n"
             f"- 計畫類型：{plan_type_name}\n"
+        )
+        if family_name and family_name != "未提供資料":
+            phone_str = f" ({family_phone})" if family_phone else ""
+            description += f"- 主要聯絡人：{family_rel} {family_name}{phone_str}\n"
+        if family_status_val and family_status_val != "無":
+            phone_str = f" ({family_status_phone})" if family_status_phone else ""
+            description += f"- 其他聯絡人/家屬：{family_status_val}{phone_str}\n"
+            
+        description += (
             f"- CMS 等級：{cms_lvl} 級\n"
             f"- 疾病史：{conds}\n"
             f"- 配置服務：{services_str}\n"
