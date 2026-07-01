@@ -72,10 +72,116 @@ def keep_alive_ping():
         # Sleep for 10 minutes (600 seconds)
         time.sleep(600)
 
+def retrieve_and_push_fan_case():
+    import time
+    time.sleep(5)  # Wait for uvicorn/gunicorn to settle
+    try:
+        import os
+        from pymongo import MongoClient
+        import requests
+        
+        mongo_uri = os.environ.get("MONGO_URI")
+        channel_access_token = database.get_setting("line_channel_access_token") or os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+        user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
+        
+        if mongo_uri and channel_access_token and user_id:
+            client = MongoClient(mongo_uri)
+            db = client.get_database("line_bot_db")
+            col = db.get_collection("sessions")
+            
+            # 1. Look for case named "范宏毅" in MongoDB backups or active session
+            all_docs = col.find()
+            target_state = None
+            for d in all_docs:
+                s = d.get("state", {})
+                if s.get("name") == "范宏毅":
+                    target_state = s
+                    break
+            
+            push_url = "https://api.line.me/v2/bot/message/push"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {channel_access_token}"
+            }
+            
+            if target_state:
+                # Format the case details nicely
+                summary = f"📋 【個案「范宏毅」資料已尋回】\n\n"
+                summary += f"• 姓名：范宏毅\n"
+                if target_state.get("visitDate"):
+                    summary += f"• 訪視日期：{target_state.get('visitDate')}\n"
+                if target_state.get("visitTime"):
+                    summary += f"• 訪視時間：{target_state.get('visitTime')}\n"
+                if target_state.get("address"):
+                    summary += f"• 地址：{target_state.get('address')}\n"
+                
+                # Check for major contact
+                family_name = target_state.get("familyName")
+                family_rel = target_state.get("familyRel")
+                family_phone = target_state.get("familyPhone")
+                if family_name and family_name != "未提供資料":
+                    summary += f"• 主要聯絡人：{family_rel} {family_name}"
+                    if family_phone:
+                        summary += f" ({family_phone})"
+                    summary += "\n"
+                
+                # Check for secondary contact
+                family_status_val = target_state.get("familyStatusVal")
+                family_status_phone = target_state.get("familyStatusPhone")
+                if family_status_val and family_status_val != "無":
+                    summary += f"• 其他成員/聯絡人：{family_status_val}"
+                    if family_status_phone:
+                        summary += f" ({family_status_phone})"
+                    summary += "\n"
+                    
+                if target_state.get("cmsLvl"):
+                    summary += f"• CMS 等級：{target_state.get('cmsLvl')} 級\n"
+                if target_state.get("selectedConditions"):
+                    summary += f"• 疾病史：{'、'.join(target_state.get('selectedConditions'))}\n"
+                    
+                payload = {
+                    "to": user_id,
+                    "messages": [{"type": "text", "text": summary}]
+                }
+                res = requests.post(push_url, headers=headers, json=payload, timeout=10)
+                logger.info(f"Fan case details pushed successfully: {res.status_code}")
+            else:
+                # 2. If no direct case state found, check if "范宏毅" is in the history logs
+                found_msg = ""
+                all_docs = col.find()
+                for d in all_docs:
+                    s = d.get("state", {})
+                    history = s.get("_history", [])
+                    for msg in history:
+                        if "范宏毅" in msg.get("content", ""):
+                            role_zh = "個管師" if msg.get("role") == "user" else "AI"
+                            found_msg += f"• {role_zh}：{msg.get('content')}\n"
+                
+                if found_msg:
+                    summary = f"📋 【對話紀錄中提及「范宏毅」的內容】：\n\n{found_msg[:800]}"
+                    payload = {
+                        "to": user_id,
+                        "messages": [{"type": "text", "text": summary}]
+                    }
+                    res = requests.post(push_url, headers=headers, json=payload, timeout=10)
+                    logger.info(f"Fan case history segments pushed successfully: {res.status_code}")
+                else:
+                    payload = {
+                        "to": user_id,
+                        "messages": [{"type": "text", "text": "🔍 抱歉，系統在雲端資料庫（MongoDB）中未找到個案「范宏毅」的暫存紀錄。"}]
+                    }
+                    requests.post(push_url, headers=headers, json=payload, timeout=10)
+                    logger.warning("No mention of 范宏毅 found in MongoDB.")
+    except Exception as e:
+        logger.error(f"Error in retrieve_and_push_fan_case: {e}")
+
 @app.on_event("startup")
 def startup_event():
     t = threading.Thread(target=keep_alive_ping, daemon=True)
     t.start()
+    
+    t_fan = threading.Thread(target=retrieve_and_push_fan_case, daemon=True)
+    t_fan.start()
 
 # Auto-populate admin user from environment variables if not present in DB
 admin_user = os.environ.get("ADMIN_USERNAME", "yuwei1112")
