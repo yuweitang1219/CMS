@@ -275,9 +275,8 @@ def process_chat(user_id, user_message, api_key):
     roc_parts = today_iso.split('-')
     today_roc = f"{int(roc_parts[0])-1911}年{roc_parts[1]}月{roc_parts[2]}日"
 
-    # If first message in a new session, auto-set visitDate to today
-    is_first_message = len(history) == 1  # only the current message, no prior history
-    if is_first_message:
+    # Set default visitDate to today only if not already set or empty
+    if not state.get('visitDate'):
         state['visitDate'] = today_iso
 
     # Setup prompt with guidelines and constants
@@ -496,6 +495,13 @@ JSON 必須包含以下兩個鍵：
         data = json.loads(text)
         updated_state = data.get("updated_state", state)
         reply_text = data.get("reply_text", "抱歉，系統處理出現了一些問題。請問您是否可以再描述一次個案的狀況？")
+        
+        # Track if the date was changed during this session
+        old_visit_date = state.get("visitDate")
+        new_visit_date = updated_state.get("visitDate")
+        if old_visit_date and new_visit_date and old_visit_date != new_visit_date:
+            updated_state["visitDateChanged"] = True
+            updated_state["visitDateConfirmed"] = False
         
         # Check and save new rule if extracted
         new_rule = data.get("new_rule")

@@ -1144,10 +1144,74 @@ async def line_webhook(request: Request):
                 logger.error(f"Error building calendar: {e}")
                 return f"❌ 同同步行事曆時發生錯誤：{str(e)}"
             
-        # Check if there is a pending calendar confirmation (是/否)
+        # Check if there is a pending plan date confirmation (是/否)
         state = load_session(user_id)
+        pending_plan_date_confirm = state.get("pending_plan_date_confirm")
+        if pending_plan_date_confirm and user_text in ["是", "好", "確認", "對", "yes", "YES", "確定"]:
+            state["pending_plan_date_confirm"] = None
+            state["visitDateConfirmed"] = True
+            state["visitDateChanged"] = False  # Reset
+            from core.chatbot import save_session as _save
+            _save(user_id, state)
+            
+            try:
+                result = generate_plan(state)
+                fee_preview = result['feeStr']
+                plan_preview = result['planText']
+                download_url = f"{base_url}/download/{user_id}"
+                
+                drive_msg = ""
+                try:
+                    from core.drive_helper import upload_plan_to_drive
+                    drive_res = upload_plan_to_drive(state, plan_preview)
+                    if drive_res.get("success"):
+                        drive_url = drive_res.get("link")
+                        drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
+                except Exception as de:
+                    logger.error(f"Error in automatic Google Drive upload: {de}")
+                    
+                plan_intro = plan_preview[:800] + "\n...（完整內容請下載 Word 檔）" if len(plan_preview) > 800 else plan_preview
+                reply_msg = (
+                    f"{fee_preview}\n\n"
+                    "====================\n"
+                    f"📄 計畫書預覽（前段）：\n{plan_intro}\n"
+                    "====================\n"
+                    f"⬇️ 點此下載完整 Word 檔：\n{download_url}"
+                    f"{drive_msg}"
+                )
+            except Exception as e:
+                logger.error(f"Error generating plan: {e}")
+                reply_msg = f"生成計畫書時發生錯誤：{str(e)}\n請確認個案資料是否完整，或輸入「重新開始」重試。"
+                
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+        elif pending_plan_date_confirm and user_text in ["否", "不用", "不要", "取消", "no", "NO", "算了"]:
+            state["pending_plan_date_confirm"] = None
+            from core.chatbot import save_session as _save
+            _save(user_id, state)
+            reply_msg = "✅ 已暫停生成計畫書。您可以輸入「更改日期為 10/24」來調整日期，或再次輸入「完成」來產出計畫書。"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+
+        # Check if there is a pending calendar confirmation (是/否)
         pending_confirm = state.get("pending_calendar_confirm")
-        if pending_confirm and user_text in ["是", "好", "確認", "對", "yes", "YES", "加入", "同步", "確定"]:
+        if pending_confirm and user_text in ["..."]:  # just placeholder to ensure match
+            pass
+        elif pending_confirm and user_text in ["是", "好", "確認", "對", "yes", "YES", "加入", "同步", "確定"]:
             # User confirmed — proceed with calendar sync
             state["pending_calendar_confirm"] = None
             try:
@@ -1315,6 +1379,24 @@ async def line_webhook(request: Request):
             state = load_session(user_id)
             if state.get("name") == "未提供資料":
                 reply_msg = "⚠️ 尚未開始建立個案，請先輸入個案的姓名（如「個案名字是張三」）以開始建立資料！"
+            elif state.get("visitDateChanged") and not state.get("visitDateConfirmed"):
+                visit_date = state.get("visitDate")
+                try:
+                    parts = visit_date.split("-")
+                    roc_year = int(parts[0]) - 1911
+                    roc_date_str = f"{roc_year} 年 {parts[1]} 月 {parts[2]} 日"
+                except Exception:
+                    roc_date_str = visit_date
+                
+                state["pending_plan_date_confirm"] = True
+                from core.chatbot import save_session as _save
+                _save(user_id, state)
+                
+                reply_msg = (
+                    f"📅 偵測到訪視日期已修改為：民國 {roc_date_str}。\n"
+                    f"請問確定以此修改後的日期生成計畫書嗎？\n\n"
+                    f"👉 請回覆「是」確認生成，或「更改日期為 7/10」以進行修改。"
+                )
             else:
                 try:
                     result = generate_plan(state)
