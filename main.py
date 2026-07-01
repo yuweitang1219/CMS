@@ -827,7 +827,34 @@ def download_care_plan(user_id: str):
     
     response_data = '\ufeff' + html_content
     name = state.get("name", "計畫書")
-    filename = f"{name}_照顧計畫.doc"
+    visit_date = state.get("visitDate")
+    
+    plan_type_map = {
+        "AA01": "AA01",
+        "ReEval": "複評",
+        "CoVisit": "共訪",
+        "NewCase": "新案",
+        "PreNewCase": "準新案",
+        "PlanChange": "異動",
+        "Private": "私人"
+    }
+    plan_type = state.get("planType", "AA01")
+    plan_type_name = plan_type_map.get(plan_type, plan_type)
+    
+    if visit_date:
+        try:
+            parts = visit_date.split("-")
+            roc_year = int(parts[0]) - 1911
+            roc_str = f"{roc_year}{parts[1]}{parts[2]}"
+        except Exception:
+            roc_str = visit_date
+    else:
+        import datetime
+        today = datetime.date.today()
+        roc_year = today.year - 1911
+        roc_str = f"{roc_year}{today.month:02d}{today.day:02d}"
+        
+    filename = f"{roc_str} {name}({plan_type_name}).doc"
     encoded_filename = urllib.parse.quote(filename)
     
     return Response(

@@ -38,11 +38,39 @@ def upload_plan_to_drive(state, plan_text):
         return {"success": False, "error": f"Authentication failed: {str(e)}"}
         
     name = state.get("name", "計畫書")
+    visit_date = state.get("visitDate")
+    
+    plan_type_map = {
+        "AA01": "AA01",
+        "ReEval": "複評",
+        "CoVisit": "共訪",
+        "NewCase": "新案",
+        "PreNewCase": "準新案",
+        "PlanChange": "異動",
+        "Private": "私人"
+    }
+    plan_type = state.get("planType", "AA01")
+    plan_type_name = plan_type_map.get(plan_type, plan_type)
+    
+    if visit_date:
+        try:
+            parts = visit_date.split("-")
+            roc_year = int(parts[0]) - 1911
+            roc_str = f"{roc_year}{parts[1]}{parts[2]}"
+        except Exception:
+            roc_str = visit_date
+    else:
+        import datetime
+        today = datetime.date.today()
+        roc_year = today.year - 1911
+        roc_str = f"{roc_year}{today.month:02d}{today.day:02d}"
+        
+    doc_title = f"{roc_str} {name}({plan_type_name})"
     
     # 4. Generate HTML content formatted for Microsoft Word / Google Docs
     html_content = f"""
     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-    <head><meta charset='utf-8'><title>照護計畫書</title></head>
+    <head><meta charset='utf-8'><title>{doc_title}</title></head>
     <body>
         <div style="font-family: 'Microsoft JhengHei', sans-serif; font-size: 14pt; line-height: 1.8;">
             {plan_text.replace("\n", "<br>")}
@@ -53,7 +81,7 @@ def upload_plan_to_drive(state, plan_text):
     
     # 5. Define Google Drive file metadata
     file_metadata = {
-        'name': f"{name}_照顧計畫書",
+        'name': doc_title,
         'mimeType': 'application/vnd.google-apps.document',  # Directs Google Drive to convert HTML to Google Doc format
         'parents': [folder_id]
     }
