@@ -106,6 +106,7 @@ def load_session(user_id):
         return get_default_state()
 
 def save_session(user_id, state):
+    # 1. Save main session to MongoDB
     if mongo_col is not None:
         try:
             mongo_col.update_one(
@@ -113,11 +114,10 @@ def save_session(user_id, state):
                 {"$set": {"state": state, "updated_at": datetime.datetime.utcnow()}},
                 upsert=True
             )
-            return
         except Exception as e:
             print(f"Error saving session to MongoDB for {user_id}: {e}")
-            # Fallback to local file below
 
+    # 2. Save main session to local file
     os.makedirs(SESSION_DIR, exist_ok=True)
     session_path = os.path.join(SESSION_DIR, f"{user_id}.json")
     try:
@@ -125,6 +125,48 @@ def save_session(user_id, state):
             json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving session for {user_id}: {e}")
+
+    # 3. If case name is set, also save a copy under the case name as backup
+    name = state.get("name")
+    if name and name != "未提供資料" and name.strip() != "":
+        backup_id = f"case_{name}"
+        if mongo_col is not None:
+            try:
+                mongo_col.update_one(
+                    {"user_id": backup_id},
+                    {"$set": {"state": state, "updated_at": datetime.datetime.utcnow()}},
+                    upsert=True
+                )
+            except Exception as e:
+                print(f"Error saving case backup {name} to MongoDB: {e}")
+        try:
+            case_path = os.path.join(SESSION_DIR, f"{name}.json")
+            with open(case_path, 'w', encoding='utf-8') as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"Error saving case backup file for {name}: {e}")
+
+def load_session_by_name(case_name):
+    """
+    Load a saved case by name (e.g. for backup/restore).
+    Checks MongoDB first, then local file.
+    """
+    if mongo_col is not None:
+        try:
+            doc = mongo_col.find_one({"user_id": f"case_{case_name}"})
+            if doc:
+                return doc.get("state")
+        except Exception as e:
+            print(f"Error loading case {case_name} from MongoDB: {e}")
+            
+    case_path = os.path.join(SESSION_DIR, f"{case_name}.json")
+    if os.path.exists(case_path):
+        try:
+            with open(case_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading case file for {case_name}: {e}")
+    return None
 
 def clear_session(user_id):
     if mongo_col is not None:
@@ -398,8 +440,9 @@ def process_chat(user_id, user_message, api_key):
    - 在產生回覆文字 (reply_text) 時，**絕對不要問任何與個案相關的問題**（例如：不要問姓名、身分別、CMS等級、ADL等），也不要詢問這是什麼計畫類型。
    - 只要簡短親切地回覆：「已記錄此行程。如果需要同步到 Google 行事曆，請輸入「建立行事曆」或「同步行事曆」！」或類似的確認即可，並提示如果需要記錄下一個個案，可隨時輸入「重新開始」。
 8. **新個案/新行程偵測與重設規則 (重要)**：
-   - 當個管師提及一個與目前狀態姓名 (name) 不同的**全新個案姓名**，或是明確表示要安排**另一場新的訪視/私人行程**時（例如：原先已記錄「王小明」，現在突然說「15:00家訪李小華」），你必須判定這是一個新案/新行程。
-   - 在此情況下，你必須將回傳的 `updated_state` JSON **重設為預設狀態（清除上一位個案的殘留評估資料）**，特別是必須**清除 `googleEventId`（將其設為 `""`、`null` 或從 JSON 鍵中移除）**，以利後續您輸入「建立行事曆」時為此新預約在日曆上建立**全新**行程（而非修改/覆蓋上一個預約）。新個案的姓名填入 `name`，新時間/日期填入 `visitTime` / `visitDate`，其他評估欄位（如疾病、CMS、ADL、配置服務等）重設為初始/預設值。
+   - 只有當個管師**明確且清楚地**表示要切換、建立或記錄另一個**全新的個案訪視或行程**時（例如：「新案子」、「記錄新個案李小華」、「安排下一位家訪李小華」），你才判定為新行程並重設狀態。
+   - **絕對不要（重要）**僅因為對話中提及了其他家屬、主要聯絡人、照護者或照專的姓名（例如提到「聯絡人是二女兒劉小姐」、「大女兒是劉小姐」、「照專是陳美麗」），就判定為新案。只要目前紀錄的個案主體（name）沒變，請繼續保留並更新現有狀態。
+   - 在判定為新行程時，你必須將回傳的 `updated_state` JSON **重設為預設狀態（清除上一位個案的殘留評估資料）**，特別是必須**清除 `googleEventId`（將其設為 `""`、`null` 或從 JSON 鍵中移除）**，以利後續您輸入「建立行事曆」時為此新預約在日曆上建立**全新**行程（而非修改/覆蓋上一個預約）。新個案的姓名填入 `name`，新時間/日期填入 `visitTime` / `visitDate`，其他評估欄位（如疾病、CMS、ADL、配置服務等）重設為初始/預設值。
    - 回覆文字（reply_text）應簡短確認已為新個案開啟記錄，並主動詢問其基本資訊。
 9. **輸出格式規範**：你必須回傳一個合法的 JSON 物件，不能包含額外的 markdown 程式碼區塊（如 ```json ... ```），只能是純 JSON 字串。
 

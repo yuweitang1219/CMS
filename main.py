@@ -1129,23 +1129,34 @@ async def line_webhook(request: Request):
             state = load_session(user_id)
             reply_msg = format_state_summary(state)
         elif user_text in ["個案清單", "清單", "list"]:
-            from core.chatbot import SESSION_DIR
+            from core.chatbot import SESSION_DIR, mongo_db
             import os
             os.makedirs(SESSION_DIR, exist_ok=True)
             files = os.listdir(SESSION_DIR)
-            cases = []
+            cases = set()
             for f in files:
                 if f.endswith(".json"):
                     name = f[:-5]
-                    if not (name.startswith("U") and len(name) > 30) and name != "test_user_999":
-                         cases.append(name)
-            if cases:
-                reply_msg = "📂 系統中可用的個案資料有：\n" + "\n".join([f"• {c}" for c in cases]) + "\n\n💡 輸入「載入 <個案姓名>」即可載入資料！\n例如：載入 張惠美"
+                    if not (name.startswith("U") and len(name) > 30) and name != "test_user_999" and not name.startswith("rules_"):
+                         cases.add(name)
+            
+            # Read MongoDB cases
+            if mongo_db is not None:
+                try:
+                    docs = mongo_db.get_collection("sessions").find({"user_id": {"$regex": "^case_"}})
+                    for doc in docs:
+                        name = doc["user_id"].replace("case_", "")
+                        cases.add(name)
+                except Exception as e:
+                    logger.error(f"Error querying cases from MongoDB: {e}")
+                    
+            cases_list = sorted(list(cases))
+            if cases_list:
+                reply_msg = "📂 系統中可用的個案資料有：\n" + "\n".join([f"• {c}" for c in cases_list]) + "\n\n💡 輸入「載入 <個案姓名>」即可載入資料！\n例如：載入 張惠美"
             else:
                 reply_msg = "📂 目前沒有已解析的個案資料。"
         elif user_text.startswith("載入") or user_text.lower().startswith("load "):
-            from core.chatbot import SESSION_DIR
-            import shutil
+            from core.chatbot import load_session_by_name, save_session
             case_name = ""
             if user_text.startswith("載入 "):
                 case_name = user_text[3:].strip()
@@ -1157,14 +1168,11 @@ async def line_webhook(request: Request):
             if not case_name:
                 reply_msg = "⚠️ 請指定要載入的個案姓名，例如「載入 張惠美」。"
             else:
-                os.makedirs(SESSION_DIR, exist_ok=True)
-                source_path = os.path.join(SESSION_DIR, f"{case_name}.json")
-                target_path = os.path.join(SESSION_DIR, f"{user_id}.json")
-                if os.path.exists(source_path):
+                loaded_state = load_session_by_name(case_name)
+                if loaded_state:
                     try:
-                        shutil.copyfile(source_path, target_path)
-                        state = load_session(user_id)
-                        summary = format_state_summary(state)
+                        save_session(user_id, loaded_state)
+                        summary = format_state_summary(loaded_state)
                         reply_msg = f"✅ 已成功載入個案「{case_name}」的資料！\n\n{summary}"
                     except Exception as e:
                         reply_msg = f"❌ 載入個案資料時發生錯誤: {str(e)}"
