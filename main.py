@@ -1709,6 +1709,15 @@ def debug_session():
     user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
     state = load_session(user_id) if user_id else {}
     
+    # Read main.py lines 1540 to 1570
+    main_lines = []
+    try:
+        with open("main.py", "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+            main_lines = all_lines[1535:1565]  # 0-indexed, corresponding to lines 1536-1566
+    except Exception as e:
+        main_lines = [f"Error reading main.py: {e}"]
+        
     from core.chatbot import SESSION_DIR
     local_files = []
     if os.path.exists(SESSION_DIR):
@@ -1718,6 +1727,7 @@ def debug_session():
         "user_id": user_id,
         "last_errors": LAST_ERRORS,
         "local_files": local_files,
+        "main_lines": main_lines,
         "state": state
     }
 
