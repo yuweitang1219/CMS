@@ -37,6 +37,7 @@ from core.engine import generate_plan
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app")
+LAST_ERRORS = []
 
 app = FastAPI(title="Google Calendar & To-Do Dashboard")
 
@@ -1695,8 +1696,31 @@ async def line_webhook(request: Request):
         logger.warning("Invalid Line webhook signature.")
         raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception as e:
-        logger.error(f"Error handling webhook events: {e}")
+        import traceback
+        err_str = f"Webhook Error: {e}\n{traceback.format_exc()}"
+        logger.error(err_str)
+        LAST_ERRORS.append(err_str)
         return {"status": "error", "details": str(e)}
+
+@app.get("/debug-session")
+def debug_session():
+    import os
+    from core.chatbot import load_session
+    user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
+    state = load_session(user_id) if user_id else {}
+    
+    from core.chatbot import SESSION_DIR
+    local_files = []
+    if os.path.exists(SESSION_DIR):
+        local_files = os.listdir(SESSION_DIR)
+        
+    return {
+        "user_id": user_id,
+        "last_errors": LAST_ERRORS,
+        "local_files": local_files,
+        "state": state
+    }
+
 # --- STATIC FILE ROUTING ---
 
 @app.get("/")
