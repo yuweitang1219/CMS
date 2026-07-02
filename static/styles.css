@@ -1384,320 +1384,215 @@ input:focus, select:focus, textarea:focus {
     to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-/* Media Queries (Responsive) */
-@media (max-width: 950px) {
-    .calendar-card {
-        height: auto;
-        min-height: 500px;
-    }
+/* Media Queries (Responsive Design System) */
 
-    .calendar-inner-grid {
-        /* fall back to vertical stack on small screens */
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
-    }
-
-    .todo-card {
-        max-height: none;
+/* 1. Desktop & Large Tablets (Landscape, width >= 1024px) */
+@media (min-width: 1024px) {
+    .dashboard-container {
+        padding: 20px 24px;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
     }
     
     .dashboard-header {
-        grid-template-columns: 1fr;
-        gap: 15px;
-        text-align: center;
+        grid-template-columns: 1.2fr auto 1.2fr;
+        padding: 12px 24px;
+        margin-bottom: 5px;
     }
-    
-    .header-left {
-        justify-content: center;
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .status-badges {
-        margin-left: 0;
-    }
-    
-    .header-right {
-        justify-content: center;
-    }
-}
 
-@media (max-width: 600px) {
-    .dashboard-container {
-        padding: 10px;
-    }
-    
-    .auth-card,
-    .grid-card {
-        padding: 20px 15px;
-    }
-    
-    .modal-form-row {
-        grid-template-columns: 1fr;
-    }
-    
-    .settings-action-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .status-badges {
-        flex-direction: column;
-        align-items: center;
-        width: 100%;
-    }
-    
-    .status-badge {
-        width: 100%;
-        justify-content: center;
-    }
-    
-    .status-badge.disconnected {
-        display: none;
-    }
-}
-
-/* Weather Widget Styles */
-.header-center {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-}
-
-.weather-display {
-    background: rgba(15, 23, 42, 0.03);
-    border: 1px solid rgba(15, 23, 42, 0.06);
-    border-radius: 12px;
-    padding: 10px 20px;
-    display: flex;
-    align-items: center;
-    font-size: 1rem;
-    color: var(--text-secondary);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
-}
-
-.weather-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.weather-location {
-    font-weight: 700;
-    color: var(--accent-cyan);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-#weather-temp {
-    font-weight: 800;
-    color: var(--text-primary);
-    font-size: 1.2rem;
-}
-
-#weather-cond {
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 1rem;
-}
-
-.text-yellow {
-    color: #ffb703;
-}
-.text-blue {
-    color: #4cc9f0;
-}
-.text-purple {
-    color: #9d4ede;
-}
-
-/* Lenovo Tab M8 (and 8" tablets) Landscape Optimization */
-@media (max-height: 800px) and (orientation: landscape) {
-    .dashboard-container {
-        padding: 10px 15px !important;
-        gap: 10px !important;
-        height: 100vh !important;
-        overflow: hidden !important;
-    }
-    
-    .dashboard-header {
-        padding: 8px 15px !important;
-        gap: 10px !important;
-    }
-    
-    #clock-time {
-        font-size: 1.6rem !important;
-    }
-    
-    #clock-date {
-        font-size: 0.75rem !important;
-        margin-top: 2px !important;
-    }
-    
-    .logo {
-        font-size: 1.1rem !important;
-    }
-    
-    .weather-display {
-        padding: 4px 10px !important;
-        font-size: 0.75rem !important;
-    }
-    
     .dashboard-grid {
-        grid-template-rows: 1.15fr 0.85fr !important;
-        gap: 10px !important;
+        grid-template-columns: 1.15fr 0.85fr; /* Left side calendar, Right side todo */
+        grid-template-rows: 1fr;
+        gap: 20px;
+        flex: 1;
+        min-height: 0;
     }
-    
-    .calendar-card {
-        height: 100% !important;
-        min-height: 0 !important;
-        padding: 12px 20px !important;
-    }
-    
-    .todo-card {
+
+    .grid-card {
         height: 100% !important;
         min-height: 0 !important;
         max-height: none !important;
-        padding: 12px 20px !important;
     }
-    
-    .card-header {
-        margin-bottom: 10px !important;
-    }
-    
-    .card-header h2 {
-        font-size: 1.1rem !important;
-    }
-    
-    /* Calendar inner grid */
+
     .calendar-inner-grid {
-        gap: 10px !important;
+        grid-template-columns: 1.85fr 1.15fr; /* Wider calendar, comfortable events timeline */
+        gap: 16px;
+        height: 100%;
+        min-height: 0;
     }
     
-    .mini-calendar-container {
-        padding: 8px !important;
+    .events-timeline {
+        height: 100%;
+        overflow-y: auto;
+    }
+    
+    .todo-list-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+}
+
+/* 2. Medium Tablets (Landscape, width: 800px to 1023px) */
+@media (min-width: 800px) and (max-width: 1023px) and (orientation: landscape) {
+    .dashboard-container {
+        padding: 12px 16px !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+
+    .dashboard-header {
+        padding: 10px 16px !important;
+        grid-template-columns: 1.2fr auto 1.2fr !important;
+        margin-bottom: 2px !important;
+    }
+    
+    #clock-time {
+        font-size: 2.2rem !important;
+    }
+    #clock-date {
+        font-size: 0.9rem !important;
+    }
+    .logo {
+        font-size: 1.15rem !important;
+    }
+    .weather-display {
+        padding: 6px 12px !important;
+        font-size: 0.8rem !important;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1.15fr 0.85fr !important; /* side-by-side */
+        grid-template-rows: 1fr !important;
+        gap: 12px !important;
+        flex: 1 !important;
+        min-height: 0 !important;
+    }
+
+    .grid-card {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        padding: 16px 20px !important;
+    }
+    
+    .calendar-inner-grid {
+        grid-template-columns: 1.55fr 1.45fr !important; /* side-by-side share inside calendar card */
+        gap: 12px !important;
+        height: 100% !important;
+        min-height: 0 !important;
     }
     
     .mini-day {
-        min-height: 46px !important;
+        min-height: 48px !important;
         padding: 3px 5px !important;
     }
     
     .day-number {
         font-size: 0.75rem !important;
-        margin-bottom: 2px !important;
     }
     
-    .day-events-container {
-        max-height: 24px !important;
+    .events-timeline {
+        height: 100% !important;
+        overflow-y: auto !important;
     }
     
-    .day-event-item {
-        font-size: 0.58rem !important;
-        padding: 1px 3px !important;
-    }
-    
-    /* Todo input form adjustments */
-    .todo-input-form {
-        padding: 8px 12px !important;
-        margin-bottom: 8px !important;
-        gap: 6px !important;
-    }
-    
-    .todo-input-row {
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 8px !important;
-    }
-    
-    .todo-input-row input {
-        padding: 6px 10px !important;
-        font-size: 0.85rem !important;
-    }
-    
-    .todo-input-meta {
-        display: flex !important;
-        gap: 6px !important;
-    }
-    
-    .priority-select,
-    .date-select {
-        height: 32px !important;
-        padding: 4px 8px !important;
-        font-size: 0.8rem !important;
-    }
-    
-    .btn-todo-add {
-        width: auto !important;
-        padding: 6px 16px !important;
-        height: 32px !important;
-        font-size: 0.8rem !important;
-    }
-    
-    .todo-filters {
-        margin-bottom: 8px !important;
-    }
-    
-    .filter-btn {
-        padding: 4px 12px !important;
-        font-size: 0.75rem !important;
-    }
-    
-    .todo-item {
-        padding: 8px 14px !important;
-    }
-    
-    .todo-item-title {
-        font-size: 0.85rem !important;
-    }
-    
-    .events-timeline h3 {
-        font-size: 0.85rem !important;
-        margin-bottom: 6px !important;
-    }
-    
-    .event-item {
-        padding: 8px 12px !important;
-    }
-    
-    .event-title {
-        font-size: 0.85rem !important;
-    }
-    
-    .event-desc {
-        font-size: 0.75rem !important;
+    .todo-list-container {
+        flex: 1 !important;
+        overflow-y: auto !important;
     }
 }
 
-/* Lenovo Tab M8 Portrait Optimization */
-@media (max-width: 800px) {
+/* 3. Tablets in Portrait (width: 600px to 1023px, portrait) */
+@media (max-width: 1023px) and (orientation: portrait) {
     .dashboard-container {
+        padding: 16px !important;
+        gap: 16px !important;
+        height: auto !important;
+        overflow: auto !important;
+    }
+
+    .dashboard-header {
+        grid-template-columns: 1fr !important;
+        text-align: center !important;
+        gap: 12px !important;
+        padding: 15px !important;
+    }
+    
+    .header-left, .header-right, .header-center {
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr !important; /* stack vertically */
+        grid-template-rows: auto auto !important;
+        gap: 16px !important;
+    }
+
+    .calendar-card {
+        height: auto !important;
+        min-height: 520px !important;
+    }
+    
+    .calendar-inner-grid {
+        grid-template-columns: 1.4fr 0.6fr !important; /* side-by-side inside calendar card */
+        gap: 16px !important;
+    }
+
+    .todo-card {
+        height: auto !important;
+        min-height: 360px !important;
+        max-height: none !important;
+    }
+}
+
+/* 4. Mobile Devices (width < 600px) */
+@media (max-width: 599px) {
+    .dashboard-container {
+        padding: 10px !important;
+        gap: 12px !important;
+        height: auto !important;
+        overflow: auto !important;
+    }
+
+    .dashboard-header {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
         padding: 12px !important;
+        text-align: center !important;
+    }
+    
+    .header-left, .header-right, .header-center {
+        justify-content: center !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto auto !important;
         gap: 12px !important;
     }
-    
-    .grid-card {
-        padding: 16px 20px !important;
-    }
-    
+
     .calendar-card {
-        min-height: 440px !important;
+        height: auto !important;
+        min-height: auto !important;
     }
     
-    .mini-day {
-        min-height: 60px !important;
-        padding: 4px !important;
+    .calendar-inner-grid {
+        grid-template-columns: 1fr !important; /* stack month calendar and events vertically */
+        grid-template-rows: auto auto !important;
+        gap: 12px !important;
     }
-    
-    .day-number {
-        font-size: 0.8rem !important;
-    }
-    
-    .day-events-container {
-        max-height: 40px !important;
+
+    .todo-card {
+        height: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
     }
 }
