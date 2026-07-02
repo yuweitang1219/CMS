@@ -857,7 +857,7 @@ input:focus, select:focus, textarea:focus {
 
 .mini-day {
     position: relative;
-    min-height: 64px;
+    height: 78px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -925,6 +925,16 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
     margin-bottom: 6px;
     display: inline-block;
+}
+
+.day-events-container {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .day-event-item {
