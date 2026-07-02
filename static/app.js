@@ -92,8 +92,10 @@ async function updateWeather() {
                 iconClass = "fa-solid fa-cloud-bolt text-purple";
             }
             
-            document.getElementById("weather-temp").textContent = `${temp}°C`;
-            document.getElementById("weather-cond").innerHTML = `<i class="${iconClass}"></i> ${conditionText}`;
+            const tempEl = document.getElementById("weather-temp");
+            const condEl = document.getElementById("weather-cond");
+            if (tempEl) tempEl.textContent = `${temp}°C`;
+            if (condEl) condEl.innerHTML = `<i class="${iconClass}"></i> ${conditionText}`;
         }
     } catch (error) {
         console.error("Failed to fetch weather data:", error);
@@ -135,7 +137,10 @@ async function checkAuthStatus() {
         } else {
             loginView.classList.add("hidden");
             dashboardView.classList.remove("hidden");
-            document.getElementById("user-display-name").textContent = state.username;
+            const userDisplayNameEl = document.getElementById("user-display-name");
+            if (userDisplayNameEl) {
+                userDisplayNameEl.textContent = state.username;
+            }
             
             // Render default calendar structure immediately to prevent blank UI while fetching
             renderMiniCalendar();
