@@ -1840,3 +1840,140 @@ html:fullscreen .dashboard-grid:has(.todo-card.hidden) {
         padding: 4px !important;
     }
 }
+
+/* ==========================================
+   10. Fullscreen Calendar Grid Stretching
+   ========================================== */
+:fullscreen .calendar-inner-grid:has(.events-timeline.hidden),
+html:fullscreen .calendar-inner-grid:has(.events-timeline.hidden) {
+    grid-template-columns: 1fr !important;
+}
+
+/* ==========================================
+   11. Fullscreen Compact Todo Styles
+   ========================================== */
+:fullscreen .todo-card,
+html:fullscreen .todo-card {
+    padding: 16px 20px !important;
+}
+:fullscreen .todo-card .card-header,
+html:fullscreen .todo-card .card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+}
+:fullscreen .todo-card h2,
+html:fullscreen .todo-card h2 {
+    font-size: 1.15rem !important;
+    writing-mode: horizontal-tb !important;
+    display: block !important;
+}
+:fullscreen .todo-progress-container,
+html:fullscreen .todo-progress-container {
+    gap: 8px !important;
+}
+:fullscreen .todo-progress-label,
+html:fullscreen .todo-progress-label {
+    font-size: 0.75rem !important;
+}
+:fullscreen .todo-input-form,
+html:fullscreen .todo-input-form {
+    padding: 10px 12px !important;
+    margin-bottom: 12px !important;
+    border-radius: 12px !important;
+}
+:fullscreen .todo-input-row input[type="text"],
+html:fullscreen .todo-input-row input[type="text"] {
+    padding: 8px 12px !important;
+    font-size: 0.85rem !important;
+}
+:fullscreen .todo-input-meta,
+html:fullscreen .todo-input-meta {
+    gap: 8px !important;
+}
+:fullscreen .priority-select,
+html:fullscreen .priority-select,
+:fullscreen .date-select,
+html:fullscreen .date-select {
+    font-size: 0.75rem !important;
+    height: 34px !important;
+    padding: 4px 8px !important;
+}
+:fullscreen .btn-todo-add,
+html:fullscreen .btn-todo-add {
+    padding: 8px !important;
+    font-size: 0.8rem !important;
+    border-radius: 8px !important;
+}
+:fullscreen .todo-filters,
+html:fullscreen .todo-filters {
+    margin-bottom: 10px !important;
+    gap: 6px !important;
+}
+:fullscreen .filter-btn,
+html:fullscreen .filter-btn {
+    padding: 4px 12px !important;
+    font-size: 0.75rem !important;
+}
+:fullscreen .todo-item,
+html:fullscreen .todo-item {
+    padding: 10px 14px !important;
+    border-radius: 10px !important;
+    gap: 8px !important;
+}
+:fullscreen .todo-item-title,
+html:fullscreen .todo-item-title {
+    font-size: 0.85rem !important;
+}
+:fullscreen .badge-priority,
+html:fullscreen .badge-priority {
+    font-size: 0.6rem !important;
+    padding: 1px 6px !important;
+    border-radius: 4px !important;
+}
+:fullscreen .todo-due,
+html:fullscreen .todo-due {
+    font-size: 0.65rem !important;
+}
+:fullscreen .custom-checkbox,
+html:fullscreen .custom-checkbox {
+    width: 18px !important;
+    height: 18px !important;
+}
+:fullscreen .custom-checkbox i,
+html:fullscreen .custom-checkbox i {
+    font-size: 0.55rem !important;
+}
+:fullscreen .btn-delete-todo,
+html:fullscreen .btn-delete-todo {
+    font-size: 0.8rem !important;
+    padding: 4px !important;
+}
+
+/* ==========================================
+   12. Tablet Windowed Side-by-Side (768px to 949px)
+   ========================================== */
+@media (min-width: 768px) and (max-width: 949px) {
+    .dashboard-container {
+        height: 100vh !important;
+        overflow: hidden !important;
+        display: grid !important;
+        grid-template-rows: auto 1fr !important;
+        padding: 12px !important;
+        gap: 12px !important;
+    }
+    .dashboard-grid {
+        grid-template-columns: 1.15fr 0.85fr !important; /* side-by-side split screen! */
+        grid-template-rows: 1fr !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        gap: 12px !important;
+    }
+    .calendar-card, .todo-card {
+        height: 100% !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+    }
+}
+

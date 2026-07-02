@@ -1098,16 +1098,10 @@ function toggleClockCollapse() {
 }
 
 function initClockCollapseState() {
-    const collapsed = localStorage.getItem("clock_collapsed");
-    if (collapsed === "true") {
-        const header = document.querySelector(".dashboard-header");
-        const miniClock = document.getElementById("mini-calendar-clock");
-        const btn = document.getElementById("clock-toggle-btn");
-        
-        if (header) header.classList.add("header-collapsed");
-        if (miniClock) miniClock.classList.remove("hidden");
-        if (btn) {
-            btn.innerHTML = '<i class="fa-solid fa-eye"></i> <span>顯示時鐘</span>';
-        }
-    }
+    // Force reset any collapse states so the header clock is always visible
+    localStorage.removeItem("clock_collapsed");
+    const header = document.querySelector(".dashboard-header");
+    if (header) header.classList.remove("header-collapsed");
+    const miniClock = document.getElementById("mini-calendar-clock");
+    if (miniClock) miniClock.classList.add("hidden");
 }
