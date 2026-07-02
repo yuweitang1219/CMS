@@ -1761,12 +1761,23 @@ def debug_session():
     if os.path.exists(SESSION_DIR):
         local_files = os.listdir(SESSION_DIR)
         
+    google_client_id = database.get_setting("google_client_id")
+    google_refresh_token = database.get_setting("google_refresh_token")
+    google_calendar_id = database.get_setting("google_calendar_id")
+    google_settings_status = {
+        "client_id_len": len(google_client_id) if google_client_id else 0,
+        "client_id_start": google_client_id[:10] if google_client_id else "",
+        "refresh_token_len": len(google_refresh_token) if google_refresh_token else 0,
+        "calendar_id": google_calendar_id
+    }
+    
     return {
         "user_id": user_id,
         "last_errors": LAST_ERRORS,
         "local_files": local_files,
         "main_lines": main_lines,
-        "state": state
+        "state": state,
+        "google_settings_status": google_settings_status
     }
 
 # --- STATIC FILE ROUTING ---
