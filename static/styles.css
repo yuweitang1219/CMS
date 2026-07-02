@@ -435,11 +435,9 @@ input:focus, select:focus, textarea:focus {
 /* Dashboard Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr;       /* single-column: calendar top, todo bottom */
-    grid-template-rows: 1fr auto;      /* calendar fills remaining height; todo auto */
+    grid-template-columns: 1fr;       /* single-column default, overridden by media queries */
+    grid-template-rows: auto;
     gap: 20px;
-    flex: 1;
-    min-height: 0;
 }
 
 /* Grid Cards */
@@ -456,17 +454,16 @@ input:focus, select:focus, textarea:focus {
     overflow: hidden;
 }
 
-/* Calendar card takes up most of the vertical space */
+/* Calendar card default */
 .calendar-card {
-    height: calc(100vh - 280px);
+    height: auto;
     min-height: 520px;
 }
 
-/* Todo card is compact below */
+/* Todo card default */
 .todo-card {
     height: auto;
-    min-height: 240px;
-    max-height: 340px;
+    min-height: 300px;
 }
 
 .card-header {
@@ -802,9 +799,6 @@ input:focus, select:focus, textarea:focus {
     display: grid;
     grid-template-columns: 3fr 1fr;   /* wider month grid, narrower events panel */
     gap: 16px;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
 }
 
 /* Mini Calendar */
@@ -815,9 +809,6 @@ input:focus, select:focus, textarea:focus {
     padding: 14px;
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
 }
 
 .mini-calendar-header {
@@ -974,7 +965,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .events-list {
-    flex: 1;
+    max-height: 380px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
