@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=2.6">
+    <link rel="stylesheet" href="/styles.css?v=2.7">
 </head>
 <body>
     
@@ -99,6 +99,9 @@
                         <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     </button>
                 </div>
+                <button class="btn btn-secondary" id="clock-toggle-btn" onclick="toggleClockCollapse()" title="收合時鐘">
+                    <i class="fa-solid fa-eye-slash"></i> <span>隱藏時鐘</span>
+                </button>
                 <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
                     <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
                 </button>
@@ -147,7 +150,10 @@
                     <div class="mini-calendar-container">
                         <div class="mini-calendar-header">
                             <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
-                            <h3 id="mini-calendar-month-year">2026年6月</h3>
+                            <div class="calendar-title-group">
+                                <h3 id="mini-calendar-month-year">2026年6月</h3>
+                                <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
+                            </div>
                             <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
                         </div>
                         <div class="mini-calendar-weekdays">
@@ -438,6 +444,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=2.6"></script>
+    <script src="/app.js?v=2.7"></script>
 </body>
 </html>

@@ -18,12 +18,14 @@ document.addEventListener("DOMContentLoaded", () => {
     startClock();
     updateWeather();
     setInterval(updateWeather, 900000); // Update every 15 minutes
+    initClockCollapseState();
 });
 
 // Clock Logic
 function startClock() {
     const timeDisplay = document.getElementById("clock-time");
     const dateDisplay = document.getElementById("clock-date");
+    const miniClockDisplay = document.getElementById("mini-calendar-clock");
     
     const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
     
@@ -34,14 +36,17 @@ function startClock() {
         let hours = String(now.getHours()).padStart(2, '0');
         let minutes = String(now.getMinutes()).padStart(2, '0');
         let seconds = String(now.getSeconds()).padStart(2, '0');
-        timeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+        const timeStr = `${hours}:${minutes}:${seconds}`;
+        
+        if (timeDisplay) timeDisplay.textContent = timeStr;
+        if (miniClockDisplay) miniClockDisplay.textContent = timeStr;
         
         // Format Date
         let year = now.getFullYear();
         let month = String(now.getMonth() + 1).padStart(2, '0');
         let date = String(now.getDate()).padStart(2, '0');
         let day = weekdays[now.getDay()];
-        dateDisplay.textContent = `${year}年${month}月${date}日 ${day}`;
+        if (dateDisplay) dateDisplay.textContent = `${year}年${month}月${date}日 ${day}`;
     }
     
     updateClock();
@@ -1042,5 +1047,44 @@ async function loadServiceAccountEmail() {
         }
     } catch (e) {
         console.error("Failed to load service account email:", e);
+    }
+}
+
+// Clock Collapse Logic
+function toggleClockCollapse() {
+    const header = document.querySelector(".dashboard-header");
+    const miniClock = document.getElementById("mini-calendar-clock");
+    const btn = document.getElementById("clock-toggle-btn");
+    
+    if (!header) return;
+    const isCollapsed = header.classList.toggle("header-collapsed");
+    
+    if (isCollapsed) {
+        if (miniClock) miniClock.classList.remove("hidden");
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-eye"></i> <span>顯示時鐘</span>';
+        }
+        localStorage.setItem("clock_collapsed", "true");
+    } else {
+        if (miniClock) miniClock.classList.add("hidden");
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> <span>隱藏時鐘</span>';
+        }
+        localStorage.setItem("clock_collapsed", "false");
+    }
+}
+
+function initClockCollapseState() {
+    const collapsed = localStorage.getItem("clock_collapsed");
+    if (collapsed === "true") {
+        const header = document.querySelector(".dashboard-header");
+        const miniClock = document.getElementById("mini-calendar-clock");
+        const btn = document.getElementById("clock-toggle-btn");
+        
+        if (header) header.classList.add("header-collapsed");
+        if (miniClock) miniClock.classList.remove("hidden");
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-eye"></i> <span>顯示時鐘</span>';
+        }
     }
 }
