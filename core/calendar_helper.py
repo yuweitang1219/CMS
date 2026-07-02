@@ -66,6 +66,29 @@ def get_oauth_service(calendar_id):
         print(f"Error building OAuth service: {e}")
         return None
 
+def get_calendar_service_from_env():
+    """
+    Builds Google Calendar service using service account credentials from environment.
+    Returns (service, calendar_id) or (None, None).
+    """
+    import os
+    import json
+    service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    calendar_id = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
+    if not service_account_json_str:
+        return None, None
+    try:
+        service_account_info = json.loads(service_account_json_str)
+        SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info, scopes=SCOPES
+        )
+        service = build('calendar', 'v3', credentials=credentials)
+        return service, calendar_id
+    except Exception as e:
+        print(f"Error authenticating with Service Account: {e}")
+        return None, None
+
 def get_travel_time(start_addr, end_addr):
     if not start_addr or not end_addr:
         return None
@@ -132,23 +155,10 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     if service:
         calendar_id = oauth_calendar_id
     else:
-        service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-        calendar_id = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
-    
-        if not service_account_json_str:
+        service, calendar_id = get_calendar_service_from_env()
+        if not service:
             print("Warning: Google Calendar OAuth not configured and service account JSON not found. Calendar sync skipped.")
             return {"success": False, "error": "No calendar credentials configured"}
-    
-        try:
-            service_account_info = json.loads(service_account_json_str)
-            SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-            credentials = service_account.Credentials.from_service_account_info(
-                service_account_info, scopes=SCOPES
-            )
-            service = build('calendar', 'v3', credentials=credentials)
-        except Exception as e:
-            print(f"Error authenticating with Service Account: {e}")
-            return {"success": False, "error": f"Auth failed: {str(e)}"}
             
     visit_date = state.get("visitDate")
     if not visit_date:
