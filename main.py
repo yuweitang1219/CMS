@@ -1697,56 +1697,6 @@ async def line_webhook(request: Request):
     except Exception as e:
         logger.error(f"Error handling webhook events: {e}")
         return {"status": "error", "details": str(e)}
-@app.get("/debug-session")
-def debug_session():
-    import os
-    from core.chatbot import load_session, mongo_col
-    user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
-    if not user_id:
-        return {"error": "no user_id"}
-    
-    state = load_session(user_id)
-    
-    # List all documents in MongoDB sessions collection
-    mongo_docs = []
-    mongo_status = "Not Connected"
-    if mongo_col is not None:
-        mongo_status = "Connected"
-        try:
-            for doc in mongo_col.find():
-                mongo_docs.append({
-                    "user_id": doc.get("user_id"),
-                    "name": doc.get("state", {}).get("name"),
-                    "visitDate": doc.get("state", {}).get("visitDate"),
-                    "updated_at": str(doc.get("updated_at"))
-                })
-        except Exception as e:
-            mongo_status = f"Error: {e}"
-            
-    # List local sessions
-    from core.chatbot import SESSION_DIR
-    local_files = []
-    if os.path.exists(SESSION_DIR):
-        local_files = os.listdir(SESSION_DIR)
-        
-    return {
-        "user_id": user_id,
-        "mongo_status": mongo_status,
-        "mongo_docs": mongo_docs,
-        "local_files": local_files,
-        "state": {
-            "name": state.get("name"),
-            "visitDate": state.get("visitDate"),
-            "visitTime": state.get("visitTime"),
-            "googleEventId": state.get("googleEventId"),
-            "pending_calendar_confirm": state.get("pending_calendar_confirm"),
-            "pending_plan_date_confirm": state.get("pending_plan_date_confirm"),
-            "visitDateChanged": state.get("visitDateChanged"),
-            "visitDateConfirmed": state.get("visitDateConfirmed"),
-            "_history": state.get("_history", [])[-15:]
-        }
-    }
-
 # --- STATIC FILE ROUTING ---
 
 @app.get("/")
