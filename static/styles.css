@@ -1610,7 +1610,7 @@ html:fullscreen #mini-calendar-clock {
 
 :fullscreen .dashboard-grid,
 html:fullscreen .dashboard-grid {
-    grid-template-columns: 1.15fr 0.85fr !important;
+    grid-template-columns: 4fr 1fr !important;
     grid-template-rows: 1fr !important;
     height: calc(100vh - 100px) !important;
     overflow: hidden !important;
