@@ -456,10 +456,29 @@ def delete_todo(todo_id: int, current_user: str = Depends(get_current_user)):
 def get_settings(request: Request, current_user: str = Depends(get_current_user)):
     g_client_id = database.get_setting("google_client_id", "")
     g_calendar_id = database.get_setting("google_calendar_id", "primary")
-    g_email = database.get_setting("google_user_email", "")
-    g_connected = bool(database.get_setting("google_refresh_token"))
     g_drive_folder_id = database.get_setting("google_drive_folder_id", "")
     g_starting_address = database.get_setting("google_starting_address", "")
+    
+    # Check if Google Calendar is connected (either via Service Account or OAuth)
+    service, _ = get_calendar_service_from_env()
+    g_connected = False
+    g_email = ""
+    
+    if service:
+        g_connected = True
+        import os
+        import json
+        sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or database.get_setting("google_service_account_json", "")
+        if sa_json:
+            try:
+                g_email = json.loads(sa_json).get("client_email", "服務帳號已連結")
+            except:
+                g_email = "服務帳號已連結"
+        else:
+            g_email = "服務帳號已連結"
+    else:
+        g_connected = bool(database.get_setting("google_refresh_token"))
+        g_email = database.get_setting("google_user_email", "")
     
     l_token = database.get_setting("line_channel_access_token", "")
     l_secret = database.get_setting("line_channel_secret", "")

@@ -284,6 +284,9 @@ input:focus, select:focus, textarea:focus {
     box-shadow: var(--glass-shadow);
     border-radius: 20px;
     padding: 15px 30px;
+    position: sticky;
+    top: 15px;
+    z-index: 1000;
 }
 
 .logo {
@@ -857,7 +860,7 @@ input:focus, select:focus, textarea:focus {
 
 .mini-day {
     position: relative;
-    height: 78px;
+    height: 68px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -921,7 +924,7 @@ input:focus, select:focus, textarea:focus {
 
 /* Internal Day Elements */
 .day-number {
-    font-size: 1.3rem;
+    font-size: 1.15rem;
     font-weight: 700;
     margin-bottom: 6px;
     display: inline-block;
@@ -938,7 +941,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .day-event-item {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 600;
     padding: 3px 6px;
     background: rgba(99, 102, 241, 0.12);
