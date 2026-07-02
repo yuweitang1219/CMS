@@ -140,12 +140,12 @@ async function checkAuthStatus() {
             await fetchTodos();
             await fetchEvents();
             
-            // Start background sync every 3 seconds for real-time updates
+            // Start background sync every 15 seconds for real-time updates (prevents lagging on tablets)
             if (state.syncInterval) clearInterval(state.syncInterval);
             state.syncInterval = setInterval(() => {
                 fetchTodos(false); // fetch silently without resetting UI state
                 fetchEvents(false);
-            }, 3000);
+            }, 15000);
         }
     } catch (error) {
         console.error("Auth check failed:", error);
