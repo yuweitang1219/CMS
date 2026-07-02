@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=3.2">
+    <link rel="stylesheet" href="/styles.css?v=3.3">
 </head>
 <body>
     
@@ -82,7 +82,6 @@
             <div class="header-center">
                 <div class="clock-display">
                     <div id="clock-time">00:00:00</div>
-                    <div id="clock-date">2026年06月26日 星期五</div>
                 </div>
                 <!--
                 <div class="weather-display" id="weather-widget">
@@ -108,6 +107,7 @@
                     <i class="fa-solid fa-eye-slash"></i> <span>隱藏時鐘</span>
                 </button>
                 -->
+                <span id="clock-date">2026年06月26日 星期五</span>
                 <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
                     <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
                 </button>
@@ -130,6 +130,9 @@
                         <h2>我的日程表</h2>
                     </div>
                     <div class="card-actions">
+                        <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
                         <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
                             <i class="fa-solid fa-rotate-right"></i>
                         </button>
@@ -452,6 +455,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=3.2"></script>
+    <script src="/app.js?v=3.3"></script>
 </body>
 </html>
