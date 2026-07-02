@@ -11,7 +11,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=3.0">
+    <link rel="stylesheet" href="/styles.css?v=3.1">
 </head>
 <body>
     
@@ -60,6 +60,7 @@
         <!-- Header -->
         <header class="dashboard-header">
             <div class="header-left">
+                <!--
                 <div class="logo">
                     <i class="fa-solid fa-compass logo-icon pulse"></i>
                     <span>Antigravity</span>
@@ -74,6 +75,7 @@
                         <span>Line 遠端未啟動</span>
                     </div>
                 </div>
+                -->
             </div>
             
             <!-- Real-time Clock & Weather -->
@@ -82,6 +84,7 @@
                     <div id="clock-time">00:00:00</div>
                     <div id="clock-date">2026年06月26日 星期五</div>
                 </div>
+                <!--
                 <div class="weather-display" id="weather-widget">
                     <div class="weather-info">
                         <span class="weather-location"><i class="fa-solid fa-location-dot"></i> 中壢</span>
@@ -89,9 +92,11 @@
                         <span id="weather-cond"><i class="fa-solid fa-spinner fa-spin"></i> 載入中</span>
                     </div>
                 </div>
+                -->
             </div>
             
             <div class="header-right">
+                <!--
                 <div class="user-profile">
                     <i class="fa-solid fa-circle-user avatar"></i>
                     <span id="user-display-name">使用者</span>
@@ -102,12 +107,15 @@
                 <button class="btn btn-secondary" id="clock-toggle-btn" onclick="toggleClockCollapse()" title="收合時鐘">
                     <i class="fa-solid fa-eye-slash"></i> <span>隱藏時鐘</span>
                 </button>
+                -->
                 <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
                     <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
                 </button>
+                <!--
                 <button class="btn btn-settings" onclick="openSettingsModal()">
                     <i class="fa-solid fa-sliders"></i> <span>設定</span>
                 </button>
+                -->
             </div>
         </header>
 
@@ -444,6 +452,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=3.0"></script>
+    <script src="/app.js?v=3.1"></script>
 </body>
 </html>
