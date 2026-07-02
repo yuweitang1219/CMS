@@ -132,6 +132,9 @@ async function checkAuthStatus() {
             dashboardView.classList.remove("hidden");
             document.getElementById("user-display-name").textContent = state.username;
             
+            // Render default calendar structure immediately to prevent blank UI while fetching
+            renderMiniCalendar();
+            
             // Initial data fetch
             await loadSettings();
             await fetchTodos();
@@ -577,16 +580,22 @@ function changeMonth(direction) {
 }
 
 function hasEventsOnDay(date) {
-    return state.events.some(event => {
+    const events = state.events || [];
+    return events.some(event => {
+        if (!event || !event.start) return false;
         const start = event.start.dateTime || event.start.date;
+        if (!start) return false;
         const eventDate = new Date(start);
         return eventDate.toDateString() === date.toDateString();
     });
 }
 
 function getEventsOnDay(date) {
-    return state.events.filter(event => {
+    const events = state.events || [];
+    return events.filter(event => {
+        if (!event || !event.start) return false;
         const start = event.start.dateTime || event.start.date;
+        if (!start) return false;
         const eventDate = new Date(start);
         return eventDate.toDateString() === date.toDateString();
     });
@@ -600,8 +609,11 @@ function renderEvents() {
     listEl.innerHTML = "";
 
     // Filter events for selected day
-    const dayEvents = state.events.filter(event => {
+    const events = state.events || [];
+    const dayEvents = events.filter(event => {
+        if (!event || !event.start) return false;
         const start = event.start.dateTime || event.start.date;
+        if (!start) return false;
         const eventDate = new Date(start);
         return eventDate.toDateString() === state.selectedDate.toDateString();
     });
