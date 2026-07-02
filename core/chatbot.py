@@ -456,6 +456,7 @@ JSON 必須包含以下兩個鍵：
     MODELS_TO_TRY = [
         'gemini-2.5-flash',
         'gemini-2.0-flash',
+        'gemini-1.5-flash',
         'gemini-flash-latest',
     ]
     

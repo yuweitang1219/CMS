@@ -1412,7 +1412,7 @@ input:focus, select:focus, textarea:focus {
     }
 
     .dashboard-grid {
-        grid-template-columns: 1.15fr 0.85fr; /* Side-by-side */
+        grid-template-columns: 1.4fr 0.6fr; /* Side-by-side */
         grid-template-rows: auto;
         gap: 20px;
         height: auto !important;
@@ -1460,7 +1460,7 @@ input:focus, select:focus, textarea:focus {
     }
 
     .dashboard-grid {
-        grid-template-columns: 1.1fr 0.9fr; /* Side-by-side */
+        grid-template-columns: 1.35fr 0.65fr; /* Side-by-side */
         grid-template-rows: auto;
         gap: 16px;
         height: auto !important;
@@ -1581,11 +1581,28 @@ html:fullscreen .dashboard-container {
     padding: 15px !important;
 }
 
+:fullscreen .dashboard-header,
+html:fullscreen .dashboard-header {
+    grid-template-columns: auto 1fr !important;
+    padding: 8px 24px !important;
+    gap: 20px !important;
+}
+
+:fullscreen .dashboard-header .header-center,
+html:fullscreen .dashboard-header .header-center {
+    display: none !important;
+}
+
+:fullscreen #mini-calendar-clock,
+html:fullscreen #mini-calendar-clock {
+    display: inline-block !important;
+}
+
 :fullscreen .dashboard-grid,
 html:fullscreen .dashboard-grid {
     grid-template-columns: 1.15fr 0.85fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 120px) !important;
+    height: calc(100vh - 100px) !important;
     overflow: hidden !important;
 }
 
@@ -1708,4 +1725,108 @@ html:fullscreen .todo-list-container {
 
 .mini-calendar-clock.hidden {
     display: none !important;
+}
+
+/* ==========================================
+   8. Fullscreen Grid Auto-Stretch Configuration
+   ========================================== */
+:fullscreen .dashboard-grid:has(.todo-card.hidden),
+html:fullscreen .dashboard-grid:has(.todo-card.hidden) {
+    grid-template-columns: 1fr !important;
+}
+
+/* ==========================================
+   9. Compact Todo Card Styling (For side-by-side layout)
+   ========================================== */
+@media (min-width: 950px) {
+    .todo-card {
+        padding: 16px 20px !important;
+    }
+    
+    .todo-card .card-header {
+        margin-bottom: 15px !important;
+    }
+    
+    .todo-card h2 {
+        font-size: 1.15rem !important;
+    }
+    
+    .todo-progress-container {
+        gap: 8px !important;
+    }
+    
+    .todo-progress-label {
+        font-size: 0.75rem !important;
+    }
+    
+    .todo-input-form {
+        padding: 10px 12px !important;
+        margin-bottom: 12px !important;
+        border-radius: 12px !important;
+    }
+    
+    .todo-input-row input[type="text"] {
+        padding: 8px 12px !important;
+        font-size: 0.85rem !important;
+    }
+    
+    .todo-input-meta {
+        gap: 8px !important;
+    }
+    
+    .priority-select, .date-select {
+        font-size: 0.75rem !important;
+        height: 34px !important;
+        padding: 4px 8px !important;
+    }
+    
+    .btn-todo-add {
+        padding: 8px !important;
+        font-size: 0.8rem !important;
+        border-radius: 8px !important;
+    }
+    
+    .todo-filters {
+        margin-bottom: 10px !important;
+        gap: 6px !important;
+    }
+    
+    .filter-btn {
+        padding: 4px 12px !important;
+        font-size: 0.75rem !important;
+    }
+    
+    .todo-item {
+        padding: 10px 14px !important;
+        border-radius: 10px !important;
+        gap: 8px !important;
+    }
+    
+    .todo-item-title {
+        font-size: 0.85rem !important;
+    }
+    
+    .badge-priority {
+        font-size: 0.6rem !important;
+        padding: 1px 6px !important;
+        border-radius: 4px !important;
+    }
+    
+    .todo-due {
+        font-size: 0.65rem !important;
+    }
+    
+    .custom-checkbox {
+        width: 18px !important;
+        height: 18px !important;
+    }
+    
+    .custom-checkbox i {
+        font-size: 0.55rem !important;
+    }
+    
+    .btn-delete-todo {
+        font-size: 0.8rem !important;
+        padding: 4px !important;
+    }
 }

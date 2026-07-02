@@ -62,7 +62,7 @@ def _parse_with_gemini(api_key, text):
     {text}
     """
     try:
-        model = genai.GenerativeModel('gemini-3.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt)
         data = response.text
         data = data.replace('```json', '').replace('```', '').strip()

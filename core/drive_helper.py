@@ -19,11 +19,14 @@ def upload_plan_to_drive(state, plan_text):
         print("Google Drive Folder ID not configured in settings. Skipping upload.")
         return {"success": False, "error": "Folder ID not configured in database settings"}
         
-    # 2. Retrieve the Service Account JSON string from environment variables
+    # 2. Retrieve the Service Account JSON string from environment variables or database fallback
     service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not service_account_json_str:
-        print("GOOGLE_SERVICE_ACCOUNT_JSON not found in environment variables. Skipping upload.")
-        return {"success": False, "error": "Service account credentials not configured in environment"}
+        service_account_json_str = database.get_setting("google_service_account_json")
+        
+    if not service_account_json_str:
+        print("Google Service Account credentials not found. Skipping upload.")
+        return {"success": False, "error": "Service account credentials not configured"}
         
     try:
         # 3. Authenticate using the Service Account credentials

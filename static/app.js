@@ -623,48 +623,65 @@ function renderEvents() {
         return eventDate.toDateString() === state.selectedDate.toDateString();
     });
 
-    if (dayEvents.length === 0) {
-        // No upcoming events: show todo list instead
-        eventsContainer.classList.add('hidden');
-        todoContainer.classList.remove('hidden');
-        emptyEl.classList.add('hidden'); // hide events empty placeholder
-        renderTodos();
+    const isFullscreen = !!document.fullscreenElement;
+
+    if (isFullscreen) {
+        // Fullscreen mode: hide todo-card when calendar events exist, show it when they don't (like original behavior)
+        if (dayEvents.length === 0) {
+            eventsContainer.classList.add('hidden');
+            todoContainer.classList.remove('hidden');
+            emptyEl.classList.add('hidden');
+            renderTodos();
+        } else {
+            eventsContainer.classList.remove('hidden');
+            todoContainer.classList.add('hidden');
+            emptyEl.classList.add('hidden');
+            renderEventsList(dayEvents, listEl);
+        }
     } else {
-        // Show events and hide todo section
+        // Normal mode: keep both cards visible, toggle empty state placeholder inside eventsContainer
         eventsContainer.classList.remove('hidden');
-        todoContainer.classList.add('hidden');
-        emptyEl.classList.add('hidden');
-        dayEvents.forEach(event => {
-            const div = document.createElement("div");
-            div.className = "event-item";
-
-            // Format time range
-            let timeStr = "整天";
-            if (event.start.dateTime) {
-                const start = new Date(event.start.dateTime);
-                const end = new Date(event.end.dateTime);
-
-                const startHour = String(start.getHours()).padStart(2, '0');
-                const startMin = String(start.getMinutes()).padStart(2, '0');
-                const endHour = String(end.getHours()).padStart(2, '0');
-                const endMin = String(end.getMinutes()).padStart(2, '0');
-
-                timeStr = `${startHour}:${startMin} - ${endHour}:${endMin}`;
-            }
-
-            div.innerHTML = `
-                <div class="event-item-left">
-                    <span class="event-title">${escapeHTML(event.summary)}</span>
-                    <span class="event-desc">${escapeHTML(event.description || "無詳細備註")}</span>
-                    <span class="event-time"><i class="fa-regular fa-clock"></i> ${timeStr}</span>
-                </div>
-                <button class="btn-delete-event" onclick="deleteEvent('${event.id}')" title="刪除行程">
-                    <i class="fa-regular fa-trash-can"></i>
-                </button>
-            `;
-            listEl.appendChild(div);
-        });
+        todoContainer.classList.remove('hidden');
+        if (dayEvents.length === 0) {
+            emptyEl.classList.remove('hidden');
+        } else {
+            emptyEl.classList.add('hidden');
+            renderEventsList(dayEvents, listEl);
+        }
     }
+}
+
+function renderEventsList(dayEvents, listEl) {
+    dayEvents.forEach(event => {
+        const div = document.createElement("div");
+        div.className = "event-item";
+
+        // Format time range
+        let timeStr = "整天";
+        if (event.start.dateTime) {
+            const start = new Date(event.start.dateTime);
+            const end = new Date(event.end.dateTime);
+
+            const startHour = String(start.getHours()).padStart(2, '0');
+            const startMin = String(start.getMinutes()).padStart(2, '0');
+            const endHour = String(end.getHours()).padStart(2, '0');
+            const endMin = String(end.getMinutes()).padStart(2, '0');
+
+            timeStr = `${startHour}:${startMin} - ${endHour}:${endMin}`;
+        }
+
+        div.innerHTML = `
+            <div class="event-item-left">
+                <span class="event-title">${escapeHTML(event.summary)}</span>
+                <span class="event-desc">${escapeHTML(event.description || "無詳細備註")}</span>
+                <span class="event-time"><i class="fa-regular fa-clock"></i> ${timeStr}</span>
+            </div>
+            <button class="btn-delete-event" onclick="deleteEvent('${event.id}')" title="刪除行程">
+                <i class="fa-regular fa-trash-can"></i>
+            </button>
+        `;
+        listEl.appendChild(div);
+    });
 }
 
 async function deleteEvent(eventId) {
@@ -996,6 +1013,7 @@ document.addEventListener("fullscreenchange", () => {
             btn.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
         }
     }
+    renderEvents();
 });
 
 // Helper to compare if two lists of events are equal

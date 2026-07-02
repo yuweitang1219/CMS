@@ -32,10 +32,21 @@ def generate_plan(state):
       "customPrices": {}
     }
     """
-    # 預設值與資料解析
-    cmsLvl = int(state.get('cmsLvl', 4))
-    trafLvl = int(state.get('trafLvl', 2))
+    # 預設值與資料解析 (加上防呆型態轉換以防 AI 提取非數字內容崩潰)
+    try:
+        cmsLvl = int(state.get('cmsLvl', 4))
+    except (ValueError, TypeError):
+        cmsLvl = 4
+        
+    try:
+        trafLvl = int(state.get('trafLvl', 2))
+    except (ValueError, TypeError):
+        trafLvl = 2
+        
     statusVal = str(state.get('statusVal', '1'))
+    if statusVal not in ['1', '2', '3']:
+        statusVal = '1'
+        
     hasF = bool(state.get('hasF', False))
     
     active_services = set(state.get('activeServices', []))
