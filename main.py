@@ -1697,8 +1697,26 @@ async def line_webhook(request: Request):
     except Exception as e:
         logger.error(f"Error handling webhook events: {e}")
         return {"status": "error", "details": str(e)}
-        
-    return {"status": "ok"}
+@app.get("/debug-session")
+def debug_session():
+    import os
+    from core.chatbot import load_session
+    user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
+    if not user_id:
+        return {"error": "no user_id"}
+    state = load_session(user_id)
+    return {
+        "user_id": user_id,
+        "name": state.get("name"),
+        "visitDate": state.get("visitDate"),
+        "visitTime": state.get("visitTime"),
+        "googleEventId": state.get("googleEventId"),
+        "pending_calendar_confirm": state.get("pending_calendar_confirm"),
+        "pending_plan_date_confirm": state.get("pending_plan_date_confirm"),
+        "visitDateChanged": state.get("visitDateChanged"),
+        "visitDateConfirmed": state.get("visitDateConfirmed"),
+        "_history": state.get("_history", [])[-15:]  # last 15 messages
+    }
 
 # --- STATIC FILE ROUTING ---
 
