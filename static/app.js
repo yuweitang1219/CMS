@@ -640,9 +640,13 @@ function renderMiniCalendar() {
             container.appendChild(dayDiv);
         }
         
-        // Renders next month padded days (fill grid of 42 cells)
+        // Renders next month padded days (fill grid to complete the week)
         const totalCells = firstDay + totalDays;
         const nextPad = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+        const totalWeeks = (totalCells + nextPad) / 7;
+        // Set dynamic class for CSS to adjust row height
+        container.classList.remove('weeks-4', 'weeks-5', 'weeks-6');
+        container.classList.add('weeks-' + totalWeeks);
         for (let i = 1; i <= nextPad; i++) {
             const dayDiv = document.createElement("div");
             dayDiv.className = "mini-day next-month";

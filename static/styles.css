@@ -1582,19 +1582,24 @@ input:focus, select:focus, textarea:focus {
 /* ==========================================
    5. Fullscreen Mode Dashboard Optimization
    ========================================== */
+/* ===== FULLSCREEN OPTIMIZED LAYOUT ===== */
+
 :fullscreen .dashboard-container,
 html:fullscreen .dashboard-container {
     height: 100vh !important;
     max-height: 100vh !important;
     overflow: hidden !important;
-    padding: 8px !important; /* Save 14px of vertical height */
+    padding: 4px !important;
+    gap: 4px !important;
 }
 
 :fullscreen .dashboard-header,
 html:fullscreen .dashboard-header {
     grid-template-columns: auto 1fr !important;
-    padding: 4px 16px !important; /* Save 8px of vertical height */
-    gap: 20px !important;
+    padding: 2px 12px !important;
+    gap: 16px !important;
+    border-radius: 10px !important;
+    min-height: 0 !important;
 }
 
 :fullscreen .dashboard-header .header-center,
@@ -1611,8 +1616,9 @@ html:fullscreen #mini-calendar-clock {
 html:fullscreen .dashboard-grid {
     grid-template-columns: 4fr 1fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 54px) !important; /* Gain 46px of vertical height! */
+    height: calc(100vh - 36px) !important;
     overflow: hidden !important;
+    gap: 4px !important;
 }
 
 :fullscreen .grid-card,
@@ -1620,39 +1626,19 @@ html:fullscreen .grid-card {
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
-    padding: 10px !important; /* Save 20px of vertical padding! */
+    padding: 4px !important;
+    border-radius: 10px !important;
 }
 
 :fullscreen .grid-card .card-header,
 html:fullscreen .grid-card .card-header {
-    display: none !important; /* Hide "我的日程表" and "待辦事項" headers to save 55px vertical space! */
-}
-
-:fullscreen .mini-calendar-header,
-html:fullscreen .mini-calendar-header {
-    margin-bottom: 6px !important;
-}
-
-:fullscreen .mini-calendar-weekdays,
-html:fullscreen .mini-calendar-weekdays {
-    margin-bottom: 2px !important;
-}
-
-:fullscreen .mini-day,
-html:fullscreen .mini-day {
-    padding: 3px !important;
-}
-
-:fullscreen .day-number,
-html:fullscreen .day-number {
-    font-size: 0.85rem !important;
-    margin-bottom: 2px !important;
+    display: none !important;
 }
 
 :fullscreen .calendar-inner-grid,
 html:fullscreen .calendar-inner-grid {
-    grid-template-columns: 2.2fr 0.8fr !important; /* Make calendar much wider! */
-    gap: 12px !important;
+    grid-template-columns: 2.2fr 0.8fr !important;
+    gap: 4px !important;
     height: 100% !important;
     overflow: hidden !important;
 }
@@ -1663,21 +1649,73 @@ html:fullscreen .mini-calendar-container {
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
+    padding: 0 !important;
+}
+
+:fullscreen .mini-calendar-header,
+html:fullscreen .mini-calendar-header {
+    margin-bottom: 2px !important;
+    padding: 0 4px !important;
+}
+
+:fullscreen .mini-calendar-weekdays,
+html:fullscreen .mini-calendar-weekdays {
+    margin-bottom: 0 !important;
+    font-size: 0.65rem !important;
 }
 
 :fullscreen .mini-calendar-days,
 html:fullscreen .mini-calendar-days {
     display: grid !important;
     grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
-    grid-template-rows: repeat(6, 1fr) !important; /* stretch equal height rows in fullscreen! */
     flex: 1 !important;
     min-height: 0 !important;
+    gap: 2px !important;
+}
+
+/* 5-week months: bigger cells */
+:fullscreen .mini-calendar-days.weeks-5,
+html:fullscreen .mini-calendar-days.weeks-5 {
+    grid-template-rows: repeat(5, 1fr) !important;
+}
+
+/* 6-week months: smaller cells */
+:fullscreen .mini-calendar-days.weeks-6,
+html:fullscreen .mini-calendar-days.weeks-6 {
+    grid-template-rows: repeat(6, 1fr) !important;
+}
+
+/* 4-week months (rare, e.g. Feb starting on Mon in non-leap year) */
+:fullscreen .mini-calendar-days.weeks-4,
+html:fullscreen .mini-calendar-days.weeks-4 {
+    grid-template-rows: repeat(4, 1fr) !important;
 }
 
 :fullscreen .mini-day,
 html:fullscreen .mini-day {
     height: 100% !important;
     min-height: 0 !important;
+    padding: 1px 2px !important;
+    border-radius: 4px !important;
+}
+
+:fullscreen .day-number,
+html:fullscreen .day-number {
+    font-size: 0.75rem !important;
+    margin-bottom: 1px !important;
+    line-height: 1 !important;
+}
+
+:fullscreen .day-events-container,
+html:fullscreen .day-events-container {
+    gap: 1px !important;
+}
+
+:fullscreen .day-event-item,
+html:fullscreen .day-event-item {
+    font-size: 0.65rem !important;
+    padding: 1px 3px !important;
+    line-height: 1.2 !important;
 }
 
 :fullscreen .events-timeline,
