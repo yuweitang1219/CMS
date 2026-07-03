@@ -1213,6 +1213,7 @@ async def line_webhook(request: Request):
                 # Clear previous overrides
                 target_state["override_start_address"] = None
                 target_state["override_source_name"] = None
+                target_state["preceding_info"] = None
                 
                 if address:
                     # 1. Try preceding case within 1.5 hours first
@@ -1228,6 +1229,11 @@ async def line_webhook(request: Request):
                                 preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
                             elif "家訪:" in preceding_summary:
                                 preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                        
+                        target_state["preceding_info"] = {
+                            "addr": preceding_addr,
+                            "name": preceding_name
+                        }
                         
                         try:
                             from core.calendar_helper import get_travel_time
@@ -1380,6 +1386,82 @@ async def line_webhook(request: Request):
                     )
                 )
             return
+        elif pending_confirm and any(k in user_text for k in ["診所", "起點", "起點出發"]):
+            # Override starting point to starting address (clinic)
+            address = state.get("address")
+            starting_addr = database.get_setting("google_starting_address", "")
+            if not starting_addr:
+                reply_msg = "⚠️ 系統尚未設定「服務起點地址」，無法改自服務起點出發。請至儀表板系統設定頁面設定。"
+            else:
+                try:
+                    from core.calendar_helper import get_travel_time
+                    t_starting = get_travel_time(starting_addr, address)
+                    if t_starting:
+                        min_s = t_starting["minutes"]
+                        km_s = t_starting["distance"]
+                        state["override_start_address"] = starting_addr
+                        state["override_source_name"] = "服務起點"
+                        from core.chatbot import save_session as _save
+                        _save(user_id, state)
+                        reply_msg = (
+                            f"🚗 已手動將車程起點改為【服務起點】！\n"
+                            f"• 預估交通車程：約 {min_s} 分鐘 ({km_s} 公里)\n\n"
+                            f"👉 請回覆「是」確認加入行事曆，或「否」取消。"
+                        )
+                    else:
+                        reply_msg = "❌ 無法估算車程（可能地圖服務超時），請再試一次或直接輸入「是」同步行事曆。"
+                except Exception as te:
+                    logger.error(f"Error overriding start point to clinic: {te}")
+                    reply_msg = f"❌ 變更起點時發生錯誤：{str(te)}"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+
+        elif pending_confirm and any(k in user_text for k in ["前案", "前一案", "前個案", "上一個"]):
+            # Override starting point to preceding event
+            address = state.get("address")
+            preceding_info = state.get("preceding_info")
+            if not preceding_info or not preceding_info.get("addr"):
+                reply_msg = "⚠️ 本次行程前 1.5 小時內，無偵測到其他日曆行程，無法改自前個案出發。"
+            else:
+                preceding_addr = preceding_info["addr"]
+                preceding_name = preceding_info["name"]
+                try:
+                    from core.calendar_helper import get_travel_time
+                    t_preceding = get_travel_time(preceding_addr, address)
+                    if t_preceding:
+                        min_p = t_preceding["minutes"]
+                        km_p = t_preceding["distance"]
+                        state["override_start_address"] = preceding_addr
+                        state["override_source_name"] = f"個案「{preceding_name}」家"
+                        from core.chatbot import save_session as _save
+                        _save(user_id, state)
+                        reply_msg = (
+                            f"🚗 已手動將車程起點改為【前一個案「{preceding_name}」家】！\n"
+                            f"• 預估交通車程：約 {min_p} 分鐘 ({km_p} 公里)\n\n"
+                            f"👉 請回覆「是」確認加入行事曆，或「否」取消。"
+                        )
+                    else:
+                        reply_msg = "❌ 無法估算車程（可能地圖服務超時），請再試一次或直接輸入「是」同步行事曆。"
+                except Exception as te:
+                    logger.error(f"Error overriding start point to preceding: {te}")
+                    reply_msg = f"❌ 變更起點時發生錯誤：{str(te)}"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+
         elif pending_confirm and user_text in ["否", "不用", "不要", "取消", "no", "NO", "算了"]:
             # User cancelled
             state["pending_calendar_confirm"] = None
