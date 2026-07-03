@@ -934,16 +934,16 @@ input:focus, select:focus, textarea:focus {
 
 /* Internal Day Elements */
 .day-number {
-    font-size: 1.15rem;
+    font-size: 0.95rem;
     font-weight: 700;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     display: inline-block;
 }
 
 .day-events-container {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     width: 100%;
     flex: 1;
     overflow-y: auto;
@@ -951,17 +951,16 @@ input:focus, select:focus, textarea:focus {
 }
 
 .day-event-item {
-    font-size: 0.85rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    padding: 3px 6px;
+    padding: 1.5px 4px;
     background: rgba(99, 102, 241, 0.12);
     border-left: 2.5px solid var(--accent-purple);
-    color: var(--accent-purple);
     border-radius: 4px;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-align: left;
     width: 100%;
     box-sizing: border-box;
 }
