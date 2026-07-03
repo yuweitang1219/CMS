@@ -1151,7 +1151,7 @@ async def line_webhook(request: Request):
                 return "⚠️ 尚未設定訪視日期，請先設定日期時間（例如輸入：「家訪時間為 10/24 14:00」），然後再同步行事曆。"
             
             try:
-                # Let's check for same-day preceding events first
+                # Check for same-day preceding events first (within 1.5 hours)
                 from core.calendar_helper import get_oauth_service, get_calendar_service_from_env
                 oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
                 service = get_oauth_service(oauth_calendar_id)
@@ -1161,7 +1161,9 @@ async def line_webhook(request: Request):
                     service, calendar_id = get_calendar_service_from_env()
                     
                 preceding_event = None
-                if service and target_state.get("visitDate") and target_state.get("address"):
+                address = target_state.get("address")
+                
+                if service and target_state.get("visitDate") and address:
                     try:
                         visit_date = target_state.get("visitDate")
                         visit_time = target_state.get("visitTime", "09:00")
@@ -1194,7 +1196,7 @@ async def line_webhook(request: Request):
                                 ev_dt = ev_dt.replace(tzinfo=None)
                                 
                                 diff_sec = (current_dt - ev_dt).total_seconds()
-                                if 0 <= diff_sec <= 90 * 60:
+                                if 0 <= diff_sec <= 90 * 60: # Within 1.5 hours
                                     if min_diff is None or diff_sec < min_diff:
                                         min_diff = diff_sec
                                         preceding_event = ev
@@ -1202,76 +1204,58 @@ async def line_webhook(request: Request):
                                 pass
                     except Exception as se:
                         logger.error(f"Error checking preceding event: {se}")
-                        
-                if preceding_event and preceding_event.get("location"):
-                    preceding_addr = preceding_event.get("location")
-                    preceding_summary = preceding_event.get("summary", "")
-                    preceding_name = preceding_summary
-                    if preceding_summary:
-                        parts = preceding_summary.strip().split()
-                        if len(parts) >= 2 and not preceding_summary.startswith("📋"):
-                            preceding_name = parts[0]
-                        elif "家訪：" in preceding_summary:
-                            preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
-                        elif "家訪:" in preceding_summary:
-                            preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
-                        
-                    starting_addr = database.get_setting("google_starting_address", "")
-                    
-                    from core.calendar_helper import get_travel_time
-                    t_preceding = get_travel_time(preceding_addr, target_state.get("address"))
-                    t_starting = get_travel_time(starting_addr, target_state.get("address")) if starting_addr else None
-                    
-                    if t_preceding:
-                        min_p = t_preceding["minutes"]
-                        km_p = t_preceding["distance"]
-                        min_s = t_starting["minutes"] if t_starting else "?"
-                        km_s = t_starting["distance"] if t_starting else "?"
-                        
-                        target_state["pending_calendar_choice"] = {
-                            "preceding_addr": preceding_addr,
-                            "preceding_name": preceding_name,
-                            "starting_addr": starting_addr
-                        }
-                        from core.chatbot import save_session
-                        save_session(user_id, target_state)
-                        
-                        msg = (
-                            f"📅 偵測到當日前置個案「{preceding_name}」。\n"
-                            f"請問本次訪視行程的交通車程要以哪一個為起點計算？\n\n"
-                            f"1️⃣ 從前一個案「{preceding_name}」出發：約 {min_p} 分鐘 ({km_p} 公里)\n"
-                            f"2️⃣ 從服務起點（診所）出發：約 {min_s} 分鐘 ({km_s} 公里)\n\n"
-                            f"👉 請直接回覆 1 或 2，系統會依您的選擇建立日曆行程。"
-                        )
-                        with ApiClient(configuration) as api_client:
-                            line_bot_api = MessagingApi(api_client)
-                            line_bot_api.reply_message(
-                                ReplyMessageRequest(
-                                    reply_token=event.reply_token,
-                                    messages=[TextMessage(text=msg)]
-                                )
-                            )
-                        return "__HANDLED__"
-                
-                # No preceding event — ask for confirmation before syncing
+
                 type_str = "私人行程" if target_state.get("planType") == "Private" else "家訪行程"
-                address = target_state.get("address")
                 addr_str = f"\n• 地點：{address}" if address else ""
                 action_str = "更新" if target_state.get("googleEventId") else "新增"
                 
                 travel_str = ""
+                # Clear previous overrides
+                target_state["override_start_address"] = None
+                target_state["override_source_name"] = None
+                
                 if address:
-                    starting_addr = database.get_setting("google_starting_address", "")
-                    if starting_addr:
+                    # 1. Try preceding case within 1.5 hours first
+                    if preceding_event and preceding_event.get("location"):
+                        preceding_addr = preceding_event.get("location")
+                        preceding_summary = preceding_event.get("summary", "")
+                        preceding_name = preceding_summary
+                        if preceding_summary:
+                            parts = preceding_summary.strip().split()
+                            if len(parts) >= 2 and not preceding_summary.startswith("📋"):
+                                preceding_name = parts[0]
+                            elif "家訪：" in preceding_summary:
+                                preceding_name = preceding_summary.split("家訪：")[1].split(" ")[0].split("(")[0]
+                            elif "家訪:" in preceding_summary:
+                                preceding_name = preceding_summary.split("家訪:")[1].split(" ")[0].split("(")[0]
+                        
                         try:
                             from core.calendar_helper import get_travel_time
-                            t_starting = get_travel_time(starting_addr, address)
-                            if t_starting:
-                                min_s = t_starting["minutes"]
-                                km_s = t_starting["distance"]
-                                travel_str = f"\n• 🚗 預估交通車程：約 {min_s} 分鐘 (距離 {km_s} 公里，自服務起點出發)"
+                            t_preceding = get_travel_time(preceding_addr, address)
+                            if t_preceding:
+                                min_p = t_preceding["minutes"]
+                                km_p = t_preceding["distance"]
+                                travel_str = f"\n• 🚗 預估交通車程：約 {min_p} 分鐘 ({km_p} 公里，自前一個案「{preceding_name}」出發)"
+                                target_state["override_start_address"] = preceding_addr
+                                target_state["override_source_name"] = f"個案「{preceding_name}」家"
                         except Exception as te:
-                            logger.error(f"Error calculating travel time for confirmation: {te}")
+                            logger.error(f"Error calculating preceding travel time: {te}")
+                    
+                    # 2. Fallback to starting address (clinic) if no preceding event or calculation failed
+                    if not travel_str:
+                        starting_addr = database.get_setting("google_starting_address", "")
+                        if starting_addr:
+                            try:
+                                from core.calendar_helper import get_travel_time
+                                t_starting = get_travel_time(starting_addr, address)
+                                if t_starting:
+                                    min_s = t_starting["minutes"]
+                                    km_s = t_starting["distance"]
+                                    travel_str = f"\n• 🚗 預估交通車程：約 {min_s} 分鐘 ({km_s} 公里，自服務起點出發)"
+                                    target_state["override_start_address"] = starting_addr
+                                    target_state["override_source_name"] = "服務起點"
+                            except Exception as te:
+                                logger.error(f"Error calculating starting travel time: {te}")
                 
                 target_state["pending_calendar_confirm"] = True
                 from core.chatbot import save_session
@@ -1289,7 +1273,7 @@ async def line_webhook(request: Request):
                 return msg
             except Exception as e:
                 logger.error(f"Error building calendar: {e}")
-                return f"❌ 同同步行事曆時發生錯誤：{str(e)}"
+                return f"❌ 同步行事曆時發生錯誤：{str(e)}"
             
         # Check if there is a pending plan date confirmation (是/否)
         state = load_session(user_id)
@@ -1365,9 +1349,16 @@ async def line_webhook(request: Request):
                 from core.calendar_helper import sync_to_calendar
                 from core.chatbot import save_session as _save
                 has_event = bool(state.get("googleEventId"))
-                sync_res = sync_to_calendar(state)
+                sync_res = sync_to_calendar(
+                    state,
+                    override_start_address=state.get("override_start_address"),
+                    override_source_name=state.get("override_source_name")
+                )
                 if sync_res.get("success"):
                     state["googleEventId"] = sync_res.get("event_id")
+                    # Clear overrides from state now that they are applied
+                    state["override_start_address"] = None
+                    state["override_source_name"] = None
                     _save(user_id, state)
                     action_str = "更新" if has_event else "建立"
                     type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
@@ -1405,55 +1396,6 @@ async def line_webhook(request: Request):
                 )
             return
 
-        # Check if there is a pending calendar choice (1/2 for start point)
-        pending_choice = state.get("pending_calendar_choice")
-        if pending_choice and user_text in ["1", "2", "一", "二"]:
-            choice = "1" if user_text in ["1", "一"] else "2"
-            preceding_addr = pending_choice.get("preceding_addr")
-            preceding_name = pending_choice.get("preceding_name")
-            starting_addr = pending_choice.get("starting_addr")
-            
-            # Remove pending flag
-            state["pending_calendar_choice"] = None
-            
-            try:
-                from core.calendar_helper import sync_to_calendar
-                if choice == "1":
-                    sync_res = sync_to_calendar(state, override_start_address=preceding_addr, override_source_name=f"個案「{preceding_name}」家")
-                else:
-                    sync_res = sync_to_calendar(state, override_start_address=starting_addr, override_source_name="服務起點")
-                    
-                if sync_res.get("success"):
-                    state["googleEventId"] = sync_res.get("event_id")
-                    from core.chatbot import save_session
-                    save_session(user_id, state)
-                    
-                    action_str = "更新" if state.get("googleEventId") else "建立"
-                    type_str = "私人行程" if state.get("planType") == "Private" else "家訪行程"
-                    addr_str = f"\n地點：{state.get('address')}" if state.get('address') else ""
-                    travel_str = ""
-                    if sync_res.get("travel_time"):
-                        travel_str = f"\n🚗 預估車程：{sync_res.get('travel_time')}"
-                        
-                    reply_msg = f"📅 已成功在 Google 行事曆{action_str}此{type_str}！\n\n個案：{state.get('name')}\n時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}{addr_str}{travel_str}"
-                else:
-                    from core.chatbot import save_session
-                    save_session(user_id, state) # save state with cleared flag anyway
-                    reply_msg = f"❌ 同同步行事曆失敗：{sync_res.get('error')}"
-            except Exception as e:
-                logger.error(f"Error handling calendar choice: {e}")
-                reply_msg = f"❌ 同同步行事曆時發生錯誤：{str(e)}"
-                
-            with ApiClient(configuration) as api_client:
-                line_bot_api = MessagingApi(api_client)
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=reply_msg)]
-                    )
-                )
-            return
-            
         reply_msg = ""
         
         # Process command keyword matching
