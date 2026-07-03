@@ -1600,6 +1600,8 @@ html:fullscreen .dashboard-header {
     gap: 16px !important;
     border-radius: 10px !important;
     min-height: 0 !important;
+    position: relative !important;
+    top: 0 !important;
 }
 
 :fullscreen .dashboard-header .header-center,
