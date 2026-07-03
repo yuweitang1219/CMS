@@ -387,6 +387,37 @@ def debug_calendar_id():
         "has_service_account": has_sa
     }
 
+@app.get("/api/debug/calendar-events")
+def debug_calendar_events():
+    service, calendar_id = get_calendar_service_from_env()
+    if not service:
+        return {"error": "no_service_built"}
+    try:
+        from datetime import datetime, timedelta
+        time_min = (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=time_min,
+            singleEvents=True,
+            orderBy='startTime',
+            maxResults=1000
+        ).execute()
+        items = events_result.get('items', [])
+        return {
+            "status": "success",
+            "calendar_id": calendar_id,
+            "event_count": len(items),
+            "events_sample": [ev.get("summary") for ev in items[:5]]
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "calendar_id": calendar_id,
+            "error_message": str(e),
+            "traceback": traceback.format_exc()
+        }
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     has_users = database.has_users()
