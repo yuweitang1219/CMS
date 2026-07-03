@@ -424,6 +424,25 @@ def debug_calendar_events():
             "traceback": traceback.format_exc()
         }
 
+@app.get("/api/debug/calendar-events-raw")
+def debug_calendar_events_raw():
+    service, calendar_id = get_calendar_service_from_env()
+    if not service:
+        return {"error": "no_service_built"}
+    try:
+        from datetime import datetime, timedelta
+        time_min = (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=time_min,
+            singleEvents=True,
+            orderBy='startTime',
+            maxResults=1000
+        ).execute()
+        return events_result
+    except Exception as e:
+        return {"error": "service_account_error", "details": str(e)}
+
 js_errors = []
 
 class JsErrorPayload(BaseModel):
