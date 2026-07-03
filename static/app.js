@@ -450,6 +450,17 @@ async function fetchEvents(showLoading = true) {
         }
     } catch (error) {
         console.error("Failed to fetch calendar events:", error);
+        fetch('/api/debug/js-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: `CAUGHT EXCEPTION in fetchEvents: ${error.message || error}`,
+                source: 'fetchEvents',
+                lineno: 0,
+                colno: 0,
+                stack: error.stack || ''
+            })
+        }).catch(() => {});
     }
 }
 
