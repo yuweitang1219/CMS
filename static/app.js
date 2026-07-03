@@ -405,7 +405,23 @@ async function fetchEvents(showLoading = true) {
     
     try {
         const response = await fetch("/api/calendar/events");
-        const data = await response.json();
+        const status = response.status;
+        const text = await response.text();
+        
+        // Report HTTP Response for debugging
+        fetch('/api/debug/js-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: `DEBUG: fetchEvents HTTP status = ${status}. response length = ${text.length}`,
+                source: 'fetchEvents',
+                lineno: 0,
+                colno: 0,
+                stack: text.slice(0, 300)
+            })
+        }).catch(() => {});
+        
+        const data = JSON.parse(text);
         
         if (data.error === "not_authorized" || data.error === "unauthorized_by_google") {
             disconnectedEl.classList.remove("hidden");
