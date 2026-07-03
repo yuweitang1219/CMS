@@ -1255,8 +1255,23 @@ async def line_webhook(request: Request):
                 
                 # No preceding event — ask for confirmation before syncing
                 type_str = "私人行程" if target_state.get("planType") == "Private" else "家訪行程"
-                addr_str = f"\n地點：{target_state.get('address')}" if target_state.get('address') else ""
+                address = target_state.get("address")
+                addr_str = f"\n• 地點：{address}" if address else ""
                 action_str = "更新" if target_state.get("googleEventId") else "新增"
+                
+                travel_str = ""
+                if address:
+                    starting_addr = database.get_setting("google_starting_address", "")
+                    if starting_addr:
+                        try:
+                            from core.calendar_helper import get_travel_time
+                            t_starting = get_travel_time(starting_addr, address)
+                            if t_starting:
+                                min_s = t_starting["minutes"]
+                                km_s = t_starting["distance"]
+                                travel_str = f"\n• 🚗 預估交通車程：約 {min_s} 分鐘 (距離 {km_s} 公里，自服務起點出發)"
+                        except Exception as te:
+                            logger.error(f"Error calculating travel time for confirmation: {te}")
                 
                 target_state["pending_calendar_confirm"] = True
                 from core.chatbot import save_session
@@ -1267,7 +1282,8 @@ async def line_webhook(request: Request):
                     f"• 類型：{type_str}\n"
                     f"• 對象：{target_state.get('name')}\n"
                     f"• 時間：{target_state.get('visitDate')} {target_state.get('visitTime', '09:00')}"
-                    f"{addr_str}\n\n"
+                    f"{addr_str}"
+                    f"{travel_str}\n\n"
                     f"👉 請回覆「是」確認，或「否」取消。"
                 )
                 return msg

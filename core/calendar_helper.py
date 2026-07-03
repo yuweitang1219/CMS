@@ -89,25 +89,56 @@ def get_calendar_service_from_env():
     except Exception as e:
         print(f"Error authenticating with Service Account: {e}")
         return None, None
+def clean_address(addr):
+    if not addr:
+        return addr
+    import re
+    # Remove granular fields like xx里, xx村, xx鄰 that cause OSM Nominatim search failures
+    cleaned = addr
+    cleaned = re.sub(r'[^區市縣]+?里', '', cleaned)
+    cleaned = re.sub(r'[^區市縣]+?村', '', cleaned)
+    cleaned = re.sub(r'\d+?鄰', '', cleaned)
+    return cleaned.strip()
 
 def get_travel_time(start_addr, end_addr):
     if not start_addr or not end_addr:
         return None
     import requests
     import urllib.parse
+    headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
+    
+    def fetch_coords(address):
+        # Try raw first
+        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(address)}&format=json&limit=1"
+        try:
+            res = requests.get(url, headers=headers, timeout=5).json()
+            if res:
+                return res[0]['lat'], res[0]['lon']
+        except Exception:
+            pass
+            
+        # Try cleaned address if raw fails
+        cleaned = clean_address(address)
+        if cleaned != address:
+            url_clean = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(cleaned)}&format=json&limit=1"
+            try:
+                res_clean = requests.get(url_clean, headers=headers, timeout=5).json()
+                if res_clean:
+                    return res_clean[0]['lat'], res_clean[0]['lon']
+            except Exception:
+                pass
+        return None
+
     try:
-        headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
-        url_start = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(start_addr)}&format=json&limit=1"
-        res_start = requests.get(url_start, headers=headers, timeout=5).json()
-        if not res_start:
+        coords_start = fetch_coords(start_addr)
+        if not coords_start:
             return None
-        lat_start, lon_start = res_start[0]['lat'], res_start[0]['lon']
+        lat_start, lon_start = coords_start
         
-        url_end = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(end_addr)}&format=json&limit=1"
-        res_end = requests.get(url_end, headers=headers, timeout=5).json()
-        if not res_end:
+        coords_end = fetch_coords(end_addr)
+        if not coords_end:
             return None
-        lat_end, lon_end = res_end[0]['lat'], res_end[0]['lon']
+        lat_end, lon_end = coords_end
         
         osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon_start},{lat_start};{lon_end},{lat_end}?overview=false"
         res_route = requests.get(osrm_url, timeout=5).json()
@@ -125,13 +156,33 @@ def get_travel_time_coords(lat_start, lon_start, end_addr):
         return None
     import requests
     import urllib.parse
+    headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
+    
+    def fetch_coords(address):
+        url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(address)}&format=json&limit=1"
+        try:
+            res = requests.get(url, headers=headers, timeout=5).json()
+            if res:
+                return res[0]['lat'], res[0]['lon']
+        except Exception:
+            pass
+            
+        cleaned = clean_address(address)
+        if cleaned != address:
+            url_clean = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(cleaned)}&format=json&limit=1"
+            try:
+                res_clean = requests.get(url_clean, headers=headers, timeout=5).json()
+                if res_clean:
+                    return res_clean[0]['lat'], res_clean[0]['lon']
+            except Exception:
+                pass
+        return None
+
     try:
-        headers = {'User-Agent': 'CarePlan-Dashboard/1.0 (contact: yuwei@example.com)'}
-        url_end = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(end_addr)}&format=json&limit=1"
-        res_end = requests.get(url_end, headers=headers, timeout=5).json()
-        if not res_end:
+        coords_end = fetch_coords(end_addr)
+        if not coords_end:
             return None
-        lat_end, lon_end = res_end[0]['lat'], res_end[0]['lon']
+        lat_end, lon_end = coords_end
         
         osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon_start},{lat_start};{lon_end},{lat_end}?overview=false"
         res_route = requests.get(osrm_url, timeout=5).json()
@@ -143,6 +194,7 @@ def get_travel_time_coords(lat_start, lon_start, end_addr):
     except Exception as e:
         print(f"Error calculating travel time from coordinates: {e}")
     return None
+
 
 def sync_to_calendar(state, override_start_address=None, override_source_name=None):
     """
@@ -333,8 +385,6 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
             f"- 疾病史：{conds}\n"
             f"- 配置服務：{services_str}\n"
         )
-        if travel_info:
-            description += travel_info
         description += f"\n此活動由長照 CarePlan LINE 機器人自動同步。"
 
     event_body = {
