@@ -487,141 +487,156 @@ function formatEventSummaryForCell(summary) {
 }
 
 function renderMiniCalendar() {
-    const container = document.getElementById("mini-calendar-days");
-    const monthYearLabel = document.getElementById("mini-calendar-month-year");
-    container.innerHTML = "";
-    
-    // Remote JS state reporting for debugging
     try {
-        const jul3 = new Date(2026, 6, 3);
-        const jul3Events = getEventsOnDay(jul3);
+        const container = document.getElementById("mini-calendar-days");
+        const monthYearLabel = document.getElementById("mini-calendar-month-year");
+        container.innerHTML = "";
+        
+        // Remote JS state reporting for debugging
+        try {
+            const jul3 = new Date(2026, 6, 3);
+            const jul3Events = getEventsOnDay(jul3);
+            fetch('/api/debug/js-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `DEBUG: state.events count = ${state.events ? state.events.length : 'null'}. Jul 3 events = ${jul3Events.length}. selectedDate = ${state.selectedDate ? state.selectedDate.toDateString() : 'null'}. currentCalendarMonth = ${state.currentCalendarMonth ? state.currentCalendarMonth.toDateString() : 'null'}.`,
+                    source: 'renderMiniCalendar',
+                    lineno: 0,
+                    colno: 0,
+                    stack: state.events ? JSON.stringify(state.events.slice(0, 2)) : ''
+                })
+            }).catch(() => {});
+        } catch(e) {}
+        
+        const year = state.currentCalendarMonth.getFullYear();
+        const month = state.currentCalendarMonth.getMonth();
+        
+        monthYearLabel.textContent = `${year}年${month + 1}月`;
+        
+        // First day of month
+        const firstDay = new Date(year, month, 1).getDay();
+        // Total days in month
+        const totalDays = new Date(year, month + 1, 0).getDate();
+        // Total days in previous month
+        const prevTotalDays = new Date(year, month, 0).getDate();
+        
+        // Renders previous month padded days
+        for (let i = firstDay - 1; i >= 0; i--) {
+            const dayDiv = document.createElement("div");
+            dayDiv.className = "mini-day prev-month";
+            
+            const thisDate = new Date(year, month - 1, prevTotalDays - i);
+            const dayOfWeek = thisDate.getDay();
+            if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
+            if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
+            
+            const dayNumSpan = document.createElement("span");
+            dayNumSpan.className = "day-number";
+            dayNumSpan.textContent = prevTotalDays - i;
+            dayDiv.appendChild(dayNumSpan);
+            
+            container.appendChild(dayDiv);
+        }
+        
+        // Renders current month days
+        const today = new Date();
+        for (let d = 1; d <= totalDays; d++) {
+            const dayDiv = document.createElement("div");
+            dayDiv.className = "mini-day";
+            
+            const thisDate = new Date(year, month, d);
+            const dayOfWeek = thisDate.getDay();
+            
+            // Highlight weekends
+            if (dayOfWeek === 6) {
+                dayDiv.classList.add("weekend-sat");
+            } else if (dayOfWeek === 0) {
+                dayDiv.classList.add("weekend-sun");
+            }
+            
+            // Highlight today
+            if (thisDate.toDateString() === today.toDateString()) {
+                dayDiv.classList.add("today");
+            }
+            
+            // Highlight selected
+            if (thisDate.toDateString() === state.selectedDate.toDateString()) {
+                dayDiv.classList.add("selected");
+            }
+            
+            // Day number header
+            const dayNumSpan = document.createElement("span");
+            dayNumSpan.className = "day-number";
+            dayNumSpan.textContent = d;
+            dayDiv.appendChild(dayNumSpan);
+            
+            // Render events directly inside the day cell
+            const eventsContainer = document.createElement("div");
+            eventsContainer.className = "day-events-container";
+            
+            const dayEvents = getEventsOnDay(thisDate);
+            dayEvents.forEach(event => {
+                const eventDiv = document.createElement("div");
+                eventDiv.className = "day-event-item";
+                
+                // Format start time
+                let timeStr = "全天";
+                if (event.start.dateTime) {
+                    const eventTime = new Date(event.start.dateTime);
+                    const hrs = String(eventTime.getHours()).padStart(2, '0');
+                    const mins = String(eventTime.getMinutes()).padStart(2, '0');
+                    timeStr = `${hrs}:${mins}`;
+                }
+                eventDiv.textContent = `${timeStr} ${formatEventSummaryForCell(event.summary)}`;
+                eventDiv.title = `${timeStr} ${event.summary}${event.description ? '\n' + event.description : ''}`;
+                
+                eventsContainer.appendChild(eventDiv);
+            });
+            
+            dayDiv.appendChild(eventsContainer);
+            
+            dayDiv.onclick = (e) => {
+                state.selectedDate = thisDate;
+                renderMiniCalendar();
+                renderEvents();
+            };
+            
+            container.appendChild(dayDiv);
+        }
+        
+        // Renders next month padded days (fill grid of 42 cells)
+        const totalCells = firstDay + totalDays;
+        const nextPad = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+        for (let i = 1; i <= nextPad; i++) {
+            const dayDiv = document.createElement("div");
+            dayDiv.className = "mini-day next-month";
+            
+            const thisDate = new Date(year, month + 1, i);
+            const dayOfWeek = thisDate.getDay();
+            if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
+            if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
+            
+            const dayNumSpan = document.createElement("span");
+            dayNumSpan.className = "day-number";
+            dayNumSpan.textContent = i;
+            dayDiv.appendChild(dayNumSpan);
+            
+            container.appendChild(dayDiv);
+        }
+    } catch (error) {
+        console.error("Error in renderMiniCalendar:", error);
         fetch('/api/debug/js-error', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                message: `DEBUG: state.events count = ${state.events ? state.events.length : 'null'}. Jul 3 events = ${jul3Events.length}. selectedDate = ${state.selectedDate ? state.selectedDate.toDateString() : 'null'}. currentCalendarMonth = ${state.currentCalendarMonth ? state.currentCalendarMonth.toDateString() : 'null'}.`,
+                message: `CAUGHT EXCEPTION in renderMiniCalendar: ${error.message || error}`,
                 source: 'renderMiniCalendar',
                 lineno: 0,
                 colno: 0,
-                stack: state.events ? JSON.stringify(state.events.slice(0, 2)) : ''
+                stack: error.stack || ''
             })
         }).catch(() => {});
-    } catch(e) {}
-    
-    const year = state.currentCalendarMonth.getFullYear();
-    const month = state.currentCalendarMonth.getMonth();
-    
-    monthYearLabel.textContent = `${year}年${month + 1}月`;
-    
-    // First day of month
-    const firstDay = new Date(year, month, 1).getDay();
-    // Total days in month
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    // Total days in previous month
-    const prevTotalDays = new Date(year, month, 0).getDate();
-    
-    // Renders previous month padded days
-    for (let i = firstDay - 1; i >= 0; i--) {
-        const dayDiv = document.createElement("div");
-        dayDiv.className = "mini-day prev-month";
-        
-        const thisDate = new Date(year, month - 1, prevTotalDays - i);
-        const dayOfWeek = thisDate.getDay();
-        if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
-        if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
-        
-        const dayNumSpan = document.createElement("span");
-        dayNumSpan.className = "day-number";
-        dayNumSpan.textContent = prevTotalDays - i;
-        dayDiv.appendChild(dayNumSpan);
-        
-        container.appendChild(dayDiv);
-    }
-    
-    // Renders current month days
-    const today = new Date();
-    for (let d = 1; d <= totalDays; d++) {
-        const dayDiv = document.createElement("div");
-        dayDiv.className = "mini-day";
-        
-        const thisDate = new Date(year, month, d);
-        const dayOfWeek = thisDate.getDay();
-        
-        // Highlight weekends
-        if (dayOfWeek === 6) {
-            dayDiv.classList.add("weekend-sat");
-        } else if (dayOfWeek === 0) {
-            dayDiv.classList.add("weekend-sun");
-        }
-        
-        // Highlight today
-        if (thisDate.toDateString() === today.toDateString()) {
-            dayDiv.classList.add("today");
-        }
-        
-        // Highlight selected
-        if (thisDate.toDateString() === state.selectedDate.toDateString()) {
-            dayDiv.classList.add("selected");
-        }
-        
-        // Day number header
-        const dayNumSpan = document.createElement("span");
-        dayNumSpan.className = "day-number";
-        dayNumSpan.textContent = d;
-        dayDiv.appendChild(dayNumSpan);
-        
-        // Render events directly inside the day cell
-        const eventsContainer = document.createElement("div");
-        eventsContainer.className = "day-events-container";
-        
-        const dayEvents = getEventsOnDay(thisDate);
-        dayEvents.forEach(event => {
-            const eventDiv = document.createElement("div");
-            eventDiv.className = "day-event-item";
-            
-            // Format start time
-            let timeStr = "全天";
-            if (event.start.dateTime) {
-                const eventTime = new Date(event.start.dateTime);
-                const hrs = String(eventTime.getHours()).padStart(2, '0');
-                const mins = String(eventTime.getMinutes()).padStart(2, '0');
-                timeStr = `${hrs}:${mins}`;
-            }
-            eventDiv.textContent = `${timeStr} ${formatEventSummaryForCell(event.summary)}`;
-            eventDiv.title = `${timeStr} ${event.summary}${event.description ? '\n' + event.description : ''}`;
-            
-            eventsContainer.appendChild(eventDiv);
-        });
-        
-        dayDiv.appendChild(eventsContainer);
-        
-        dayDiv.onclick = (e) => {
-            state.selectedDate = thisDate;
-            renderMiniCalendar();
-            renderEvents();
-        };
-        
-        container.appendChild(dayDiv);
-    }
-    
-    // Renders next month padded days (fill grid of 42 cells)
-    const totalCells = firstDay + totalDays;
-    const nextPad = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-    for (let i = 1; i <= nextPad; i++) {
-        const dayDiv = document.createElement("div");
-        dayDiv.className = "mini-day next-month";
-        
-        const thisDate = new Date(year, month + 1, i);
-        const dayOfWeek = thisDate.getDay();
-        if (dayOfWeek === 6) dayDiv.classList.add("weekend-sat");
-        if (dayOfWeek === 0) dayDiv.classList.add("weekend-sun");
-        
-        const dayNumSpan = document.createElement("span");
-        dayNumSpan.className = "day-number";
-        dayNumSpan.textContent = i;
-        dayDiv.appendChild(dayNumSpan);
-        
-        container.appendChild(dayDiv);
     }
 }
 
@@ -653,47 +668,62 @@ function getEventsOnDay(date) {
 }
 
 function renderEvents() {
-    const listEl = document.getElementById("events-list");
-    const emptyEl = document.getElementById("events-list-empty");
-    const eventsContainer = document.querySelector('.events-timeline');
-    const todoContainer = document.querySelector('.todo-card');
-    listEl.innerHTML = "";
+    try {
+        const listEl = document.getElementById("events-list");
+        const emptyEl = document.getElementById("events-list-empty");
+        const eventsContainer = document.querySelector('.events-timeline');
+        const todoContainer = document.querySelector('.todo-card');
+        listEl.innerHTML = "";
 
-    // Filter events for selected day
-    const events = state.events || [];
-    const dayEvents = events.filter(event => {
-        if (!event || !event.start) return false;
-        const start = event.start.dateTime || event.start.date;
-        if (!start) return false;
-        const eventDate = new Date(start);
-        return eventDate.toDateString() === state.selectedDate.toDateString();
-    });
+        // Filter events for selected day
+        const events = state.events || [];
+        const dayEvents = events.filter(event => {
+            if (!event || !event.start) return false;
+            const start = event.start.dateTime || event.start.date;
+            if (!start) return false;
+            const eventDate = new Date(start);
+            return eventDate.toDateString() === state.selectedDate.toDateString();
+        });
 
-    const isFullscreen = !!document.fullscreenElement;
+        const isFullscreen = !!document.fullscreenElement;
 
-    if (isFullscreen) {
-        // Fullscreen mode: hide todo-card when calendar events exist, show it when they don't (like original behavior)
-        if (dayEvents.length === 0) {
-            eventsContainer.classList.add('hidden');
-            todoContainer.classList.remove('hidden');
-            emptyEl.classList.add('hidden');
-            renderTodos();
+        if (isFullscreen) {
+            // Fullscreen mode: hide todo-card when calendar events exist, show it when they don't (like original behavior)
+            if (dayEvents.length === 0) {
+                eventsContainer.classList.add('hidden');
+                todoContainer.classList.remove('hidden');
+                emptyEl.classList.add('hidden');
+                renderTodos();
+            } else {
+                eventsContainer.classList.remove('hidden');
+                todoContainer.classList.add('hidden');
+                emptyEl.classList.add('hidden');
+                renderEventsList(dayEvents, listEl);
+            }
         } else {
+            // Normal mode: keep both cards visible, toggle empty state placeholder inside eventsContainer
             eventsContainer.classList.remove('hidden');
-            todoContainer.classList.add('hidden');
-            emptyEl.classList.add('hidden');
-            renderEventsList(dayEvents, listEl);
+            todoContainer.classList.remove('hidden');
+            if (dayEvents.length === 0) {
+                emptyEl.classList.remove('hidden');
+            } else {
+                emptyEl.classList.add('hidden');
+                renderEventsList(dayEvents, listEl);
+            }
         }
-    } else {
-        // Normal mode: keep both cards visible, toggle empty state placeholder inside eventsContainer
-        eventsContainer.classList.remove('hidden');
-        todoContainer.classList.remove('hidden');
-        if (dayEvents.length === 0) {
-            emptyEl.classList.remove('hidden');
-        } else {
-            emptyEl.classList.add('hidden');
-            renderEventsList(dayEvents, listEl);
-        }
+    } catch (error) {
+        console.error("Error in renderEvents:", error);
+        fetch('/api/debug/js-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: `CAUGHT EXCEPTION in renderEvents: ${error.message || error}`,
+                source: 'renderEvents',
+                lineno: 0,
+                colno: 0,
+                stack: error.stack || ''
+            })
+        }).catch(() => {});
     }
 }
 
