@@ -442,7 +442,21 @@ async function fetchEvents(showLoading = true) {
             updateGoogleBadge(true);
             
             const newEvents = data.items || [];
-            if (!areEventsEqual(state.events, newEvents)) {
+            const eqResult = areEventsEqual(state.events, newEvents);
+            
+            fetch('/api/debug/js-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `DEBUG: inside else if. newEvents.length = ${newEvents.length}. state.events.length = ${state.events.length}. areEventsEqual = ${eqResult}`,
+                    source: 'fetchEvents',
+                    lineno: 0,
+                    colno: 0,
+                    stack: ''
+                })
+            }).catch(() => {});
+
+            if (!eqResult) {
                 state.events = newEvents;
                 renderMiniCalendar();
                 renderEvents();
