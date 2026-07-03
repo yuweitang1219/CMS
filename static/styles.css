@@ -1697,6 +1697,9 @@ html:fullscreen .mini-day {
     min-height: 0 !important;
     padding: 1px 2px !important;
     border-radius: 4px !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 :fullscreen .day-number,
@@ -1704,11 +1707,16 @@ html:fullscreen .day-number {
     font-size: 0.75rem !important;
     margin-bottom: 1px !important;
     line-height: 1 !important;
+    flex-shrink: 0 !important;
 }
 
 :fullscreen .day-events-container,
 html:fullscreen .day-events-container {
     gap: 1px !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }
 
 :fullscreen .day-event-item,
@@ -1716,6 +1724,7 @@ html:fullscreen .day-event-item {
     font-size: 0.65rem !important;
     padding: 1px 3px !important;
     line-height: 1.2 !important;
+    flex-shrink: 0 !important;
 }
 
 :fullscreen .events-timeline,
