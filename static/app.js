@@ -480,6 +480,7 @@ async function fetchEvents(showLoading = true) {
 
 function updateGoogleBadge(isConnected) {
     const badge = document.getElementById("status-google");
+    if (!badge) return;
     if (isConnected) {
         badge.className = "status-badge connected";
         badge.querySelector("span").textContent = "Google 日曆已同步";
@@ -933,13 +934,17 @@ async function loadSettings() {
             if (data.line.token_configured && data.line.secret_configured) {
                 lConnectedEl.classList.remove("hidden");
                 lDisconnectedEl.classList.add("hidden");
-                lineBadge.className = "status-badge connected";
-                lineBadge.querySelector("span").textContent = "Line 遠端已啟用";
+                if (lineBadge) {
+                    lineBadge.className = "status-badge connected";
+                    lineBadge.querySelector("span").textContent = "Line 遠端已啟用";
+                }
             } else {
                 lConnectedEl.classList.add("hidden");
                 lDisconnectedEl.classList.remove("hidden");
-                lineBadge.className = "status-badge disconnected";
-                lineBadge.querySelector("span").textContent = "Line 遠端未啟用";
+                if (lineBadge) {
+                    lineBadge.className = "status-badge disconnected";
+                    lineBadge.querySelector("span").textContent = "Line 遠端未啟用";
+                }
             }
             
             // Dynamic Webhook details for setup instruction page

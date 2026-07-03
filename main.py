@@ -1876,15 +1876,15 @@ def debug_session():
 
 @app.get("/")
 def get_index():
-    return FileResponse("static/index.html")
+    return FileResponse("static/index.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
 @app.get("/styles.css")
 def get_css():
-    return FileResponse("static/styles.css")
+    return FileResponse("static/styles.css", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
 @app.get("/app.js")
 def get_js():
-    return FileResponse("static/app.js")
+    return FileResponse("static/app.js", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
 # Mount any other static files at /static
 app.mount("/static", StaticFiles(directory="static"), name="static")
