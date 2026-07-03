@@ -19,6 +19,14 @@ document.addEventListener("DOMContentLoaded", () => {
     updateWeather();
     setInterval(updateWeather, 900000); // Update every 15 minutes
     initClockCollapseState();
+    
+    // Instantly sync data when the user focuses the tab or wakes up the tablet screen
+    window.addEventListener("focus", () => {
+        if (state.loggedIn) {
+            fetchTodos(false);
+            fetchEvents(false);
+        }
+    });
 });
 
 // Clock Logic
