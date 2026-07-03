@@ -1587,13 +1587,13 @@ html:fullscreen .dashboard-container {
     height: 100vh !important;
     max-height: 100vh !important;
     overflow: hidden !important;
-    padding: 15px !important;
+    padding: 8px !important; /* Save 14px of vertical height */
 }
 
 :fullscreen .dashboard-header,
 html:fullscreen .dashboard-header {
     grid-template-columns: auto 1fr !important;
-    padding: 8px 24px !important;
+    padding: 4px 16px !important; /* Save 8px of vertical height */
     gap: 20px !important;
 }
 
@@ -1611,7 +1611,7 @@ html:fullscreen #mini-calendar-clock {
 html:fullscreen .dashboard-grid {
     grid-template-columns: 4fr 1fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 100px) !important;
+    height: calc(100vh - 54px) !important; /* Gain 46px of vertical height! */
     overflow: hidden !important;
 }
 
@@ -1620,6 +1620,33 @@ html:fullscreen .grid-card {
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
+    padding: 10px !important; /* Save 20px of vertical padding! */
+}
+
+:fullscreen .grid-card .card-header,
+html:fullscreen .grid-card .card-header {
+    display: none !important; /* Hide "我的日程表" and "待辦事項" headers to save 55px vertical space! */
+}
+
+:fullscreen .mini-calendar-header,
+html:fullscreen .mini-calendar-header {
+    margin-bottom: 6px !important;
+}
+
+:fullscreen .mini-calendar-weekdays,
+html:fullscreen .mini-calendar-weekdays {
+    margin-bottom: 2px !important;
+}
+
+:fullscreen .mini-day,
+html:fullscreen .mini-day {
+    padding: 3px !important;
+}
+
+:fullscreen .day-number,
+html:fullscreen .day-number {
+    font-size: 0.85rem !important;
+    margin-bottom: 2px !important;
 }
 
 :fullscreen .calendar-inner-grid,
