@@ -407,7 +407,13 @@ def debug_calendar_events():
             "status": "success",
             "calendar_id": calendar_id,
             "event_count": len(items),
-            "events_sample": [ev.get("summary") for ev in items[:5]]
+            "events_sample": [
+                {
+                    "summary": ev.get("summary"),
+                    "start": ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+                }
+                for ev in items
+            ]
         }
     except Exception as e:
         import traceback
