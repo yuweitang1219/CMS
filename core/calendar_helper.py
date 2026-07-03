@@ -93,8 +93,26 @@ def clean_address(addr):
     if not addr:
         return addr
     import re
+    
+    cleaned = addr.strip()
+    
+    # Prepend default Taoyuan City / Zhongli District if missing
+    if "桃園" not in cleaned and "中壢" not in cleaned:
+        # Check if user typed other Taoyuan districts (like 平鎮, 八德, etc.). If not, default to 中壢區
+        taoyuan_districts = ["八德", "平鎮", "蘆竹", "大園", "龜山", "大溪", "龍潭", "復興", "新屋", "觀音"]
+        if not any(dist in cleaned for dist in taoyuan_districts):
+            cleaned = "桃園市中壢區" + cleaned
+        else:
+            cleaned = "桃園市" + cleaned
+    elif "中壢" in cleaned and "桃園" not in cleaned:
+        cleaned = "桃園市" + cleaned
+    elif "桃園" in cleaned and "中壢" not in cleaned:
+        # If Taoyuan is mentioned but no district, and no other district is mentioned, default to 中壢區
+        taoyuan_districts = ["中壢", "八德", "平鎮", "蘆竹", "大園", "龜山", "大溪", "龍潭", "復興", "新屋", "觀音"]
+        if not any(dist in cleaned for dist in taoyuan_districts):
+            cleaned = cleaned.replace("桃園市", "桃園市中壢區").replace("桃園縣", "桃園縣中壢區")
+            
     # Remove granular fields like xx里, xx村, xx鄰 that cause OSM Nominatim search failures
-    cleaned = addr
     cleaned = re.sub(r'[^區市縣]+?里', '', cleaned)
     cleaned = re.sub(r'[^區市縣]+?村', '', cleaned)
     cleaned = re.sub(r'\d+?鄰', '', cleaned)
