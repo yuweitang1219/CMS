@@ -424,6 +424,32 @@ def debug_calendar_events():
             "traceback": traceback.format_exc()
         }
 
+js_errors = []
+
+class JsErrorPayload(BaseModel):
+    message: str
+    source: str = None
+    lineno: int = None
+    colno: int = None
+    stack: str = None
+
+@app.post("/api/debug/js-error")
+def report_js_error(payload: JsErrorPayload):
+    global js_errors
+    from datetime import datetime
+    js_errors.append({
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "error": payload.dict()
+    })
+    if len(js_errors) > 50:
+        js_errors.pop(0)
+    logger.error(f"Client JS Error: {payload.message} at {payload.source}:{payload.lineno}")
+    return {"status": "ok"}
+
+@app.get("/api/debug/js-errors")
+def get_js_errors():
+    return js_errors
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     has_users = database.has_users()
