@@ -475,6 +475,23 @@ function renderMiniCalendar() {
     const monthYearLabel = document.getElementById("mini-calendar-month-year");
     container.innerHTML = "";
     
+    // Remote JS state reporting for debugging
+    try {
+        const jul3 = new Date(2026, 6, 3);
+        const jul3Events = getEventsOnDay(jul3);
+        fetch('/api/debug/js-error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: `DEBUG: state.events count = ${state.events ? state.events.length : 'null'}. Jul 3 events = ${jul3Events.length}. selectedDate = ${state.selectedDate ? state.selectedDate.toDateString() : 'null'}. currentCalendarMonth = ${state.currentCalendarMonth ? state.currentCalendarMonth.toDateString() : 'null'}.`,
+                source: 'renderMiniCalendar',
+                lineno: 0,
+                colno: 0,
+                stack: state.events ? JSON.stringify(state.events.slice(0, 2)) : ''
+            })
+        }).catch(() => {});
+    } catch(e) {}
+    
     const year = state.currentCalendarMonth.getFullYear();
     const month = state.currentCalendarMonth.getMonth();
     
