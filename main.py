@@ -375,7 +375,17 @@ def get_calendar_service_from_env():
         logger.error(f"Error building Service Account calendar service: {e}")
         return None, None
 
-# --- AUTH API ENDPOINTS ---
+@app.get("/api/debug/calendar-id")
+def debug_calendar_id():
+    import os
+    env_cal_id = os.environ.get("GOOGLE_CALENDAR_ID")
+    db_cal_id = database.get_setting("google_calendar_id")
+    has_sa = bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or database.get_setting("google_service_account_json"))
+    return {
+        "env_calendar_id": env_cal_id,
+        "db_calendar_id": db_cal_id,
+        "has_service_account": has_sa
+    }
 
 @app.get("/api/auth/status")
 def auth_status(request: Request):
