@@ -28,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=5.2">
+    <link rel="stylesheet" href="/styles.css?v=5.3">
 </head>
 <body>
     
@@ -194,7 +194,12 @@
 
                     <!-- Upcoming Events List -->
                     <div class="events-timeline">
-                        <h3>接下來的行程</h3>
+                        <div class="events-timeline-header">
+                            <h3>接下來的行程</h3>
+                            <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
+                                <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
+                            </button>
+                        </div>
                         <div id="events-list-empty" class="empty-state hidden">
                             <i class="fa-solid fa-calendar-minus empty-icon"></i>
                             <p>此日期沒有安排任何行程</p>
@@ -472,6 +477,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=5.2"></script>
+    <script src="/app.js?v=5.3"></script>
 </body>
 </html>

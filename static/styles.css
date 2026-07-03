@@ -978,12 +978,25 @@ input:focus, select:focus, textarea:focus {
     overflow: hidden;
 }
 
-.events-timeline h3 {
+.events-timeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.events-timeline-header h3 {
     font-size: 0.95rem;
     color: var(--text-secondary);
-    margin-bottom: 12px;
     font-weight: 700;
     letter-spacing: 0.5px;
+    margin: 0;
+}
+
+/* Hide inline fullscreen button by default (only show in fullscreen) */
+#fullscreen-btn-inline {
+    display: none;
 }
 
 .events-list {
@@ -1590,22 +1603,12 @@ html:fullscreen .dashboard-container {
     max-height: 100vh !important;
     overflow: hidden !important;
     padding: 4px !important;
-    gap: 4px !important;
+    gap: 0 !important;
 }
 
+/* Hide entire header in fullscreen to maximize space */
 :fullscreen .dashboard-header,
 html:fullscreen .dashboard-header {
-    grid-template-columns: auto 1fr !important;
-    padding: 2px 12px !important;
-    gap: 16px !important;
-    border-radius: 10px !important;
-    min-height: 0 !important;
-    position: relative !important;
-    top: 0 !important;
-}
-
-:fullscreen .dashboard-header .header-center,
-html:fullscreen .dashboard-header .header-center {
     display: none !important;
 }
 
@@ -1614,11 +1617,17 @@ html:fullscreen #mini-calendar-clock {
     display: inline-block !important;
 }
 
+/* Show inline fullscreen button next to "接下來的行程" */
+:fullscreen #fullscreen-btn-inline,
+html:fullscreen #fullscreen-btn-inline {
+    display: inline-flex !important;
+}
+
 :fullscreen .dashboard-grid,
 html:fullscreen .dashboard-grid {
     grid-template-columns: 4fr 1fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 36px) !important;
+    height: calc(100vh - 8px) !important;
     overflow: hidden !important;
     gap: 4px !important;
 }
@@ -1736,10 +1745,14 @@ html:fullscreen .events-timeline {
     overflow: hidden !important;
 }
 
-:fullscreen .events-timeline h3,
-html:fullscreen .events-timeline h3 {
-    font-size: 1.05rem !important;
-    margin-bottom: 10px !important;
+:fullscreen .events-timeline-header,
+html:fullscreen .events-timeline-header {
+    margin-bottom: 6px !important;
+}
+
+:fullscreen .events-timeline-header h3,
+html:fullscreen .events-timeline-header h3 {
+    font-size: 1rem !important;
 }
 
 :fullscreen .event-item,

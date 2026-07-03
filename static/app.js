@@ -1129,12 +1129,13 @@ function toggleFullscreen() {
 // Sync fullscreen button status (in case user exits with ESC key)
 document.addEventListener("fullscreenchange", () => {
     const btn = document.getElementById("fullscreen-btn");
-    if (btn) {
-        if (document.fullscreenElement) {
-            btn.innerHTML = '<i class="fa-solid fa-compress"></i> <span>視窗模式</span>';
-        } else {
-            btn.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
-        }
+    const btnInline = document.getElementById("fullscreen-btn-inline");
+    if (document.fullscreenElement) {
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-compress"></i> <span>視窗模式</span>';
+        if (btnInline) btnInline.innerHTML = '<i class="fa-solid fa-compress"></i> <span>視窗模式</span>';
+    } else {
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
+        if (btnInline) btnInline.innerHTML = '<i class="fa-solid fa-expand"></i> <span>全螢幕</span>';
     }
     renderEvents();
 });
