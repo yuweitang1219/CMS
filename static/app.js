@@ -242,6 +242,10 @@ async function handleLogout() {
 async function fetchTodos(showLoading = true) {
     try {
         const response = await fetch("/api/todos");
+        if (response.status === 401) {
+            checkAuthStatus();
+            return;
+        }
         if (response.ok) {
             const newTodos = await response.json();
             if (!areTodosEqual(state.todos, newTodos)) {
@@ -420,6 +424,11 @@ async function fetchEvents(showLoading = true) {
                 stack: text.slice(0, 300)
             })
         }).catch(() => {});
+
+        if (status === 401) {
+            checkAuthStatus();
+            return;
+        }
         
         const data = JSON.parse(text);
         
@@ -860,6 +869,10 @@ async function handleCreateEvent(event) {
 async function loadSettings() {
     try {
         const response = await fetch("/api/settings");
+        if (response.status === 401) {
+            checkAuthStatus();
+            return;
+        }
         if (response.ok) {
             const data = await response.json();
             state.settings = data;
