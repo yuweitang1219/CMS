@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            var payload = {
+                message: message || '',
+                source: source || '',
+                lineno: lineno || 0,
+                colno: colno || 0,
+                stack: error ? error.stack : ''
+            };
+            fetch('/api/debug/js-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(function(){});
+            return false;
+        };
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>個人智能生活儀表板 - 行事曆 & 待辦事項</title>
@@ -11,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=3.6">
+    <link rel="stylesheet" href="/styles.css?v=3.7">
 </head>
 <body>
     
@@ -455,6 +472,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=3.6"></script>
+    <script src="/app.js?v=3.7"></script>
 </body>
 </html>
