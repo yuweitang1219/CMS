@@ -67,6 +67,72 @@ def get_oauth_service(calendar_id):
         print(f"Error building OAuth service: {e}")
         return None
 
+def get_oauth_drive_service():
+    """
+    Builds Google Drive service using OAuth credentials from database settings.
+    Automatically refreshes expired access tokens.
+    """
+    import database
+    from datetime import datetime, timezone
+    import requests
+    from google.oauth2.credentials import Credentials
+    
+    client_id = database.get_setting("google_client_id")
+    client_secret = database.get_setting("google_client_secret")
+    refresh_token = database.get_setting("google_refresh_token")
+    access_token = database.get_setting("google_access_token")
+    expiry_str = database.get_setting("google_token_expiry")
+    
+    if not client_id or not client_secret or not refresh_token:
+        return None
+        
+    is_expired = True
+    if expiry_str:
+        try:
+            expiry = float(expiry_str)
+            if expiry > datetime.now(timezone.utc).timestamp() + 60:
+                is_expired = False
+        except ValueError:
+            pass
+            
+    if is_expired:
+        url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token"
+        }
+        try:
+            response = requests.post(url, data=payload, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                access_token = data.get("access_token")
+                expires_in = data.get("expires_in", 3600)
+                new_expiry = datetime.now(timezone.utc).timestamp() + expires_in
+                database.set_setting("google_access_token", access_token)
+                database.set_setting("google_token_expiry", str(new_expiry))
+                if data.get("refresh_token"):
+                    database.set_setting("google_refresh_token", data.get("refresh_token"))
+            else:
+                return None
+        except Exception:
+            return None
+            
+    try:
+        creds = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        service = build('drive', 'v3', credentials=creds)
+        return service
+    except Exception as e:
+        print(f"Error building OAuth Drive service: {e}")
+        return None
+
 def get_calendar_service_from_env():
     """
     Builds Google Calendar service using service account credentials from environment.

@@ -911,6 +911,7 @@ async function loadSettings() {
             document.getElementById("google-client-id").value = data.google.client_id || "";
             document.getElementById("google-calendar-id").value = data.google.calendar_id || "primary";
             document.getElementById("google-drive-folder-id").value = data.google.drive_folder_id || "";
+            document.getElementById("google-service-account-json").value = data.google.service_account_json || "";
             document.getElementById("google-starting-address").value = data.google.starting_address || "";
             const gConnectedEl = document.getElementById("google-status-connected");
             const gDisconnectedEl = document.getElementById("google-status-disconnected");
@@ -966,6 +967,7 @@ async function handleSaveGoogleSettings(event) {
     const clientSecret = document.getElementById("google-client-secret").value.trim();
     const calendarId = document.getElementById("google-calendar-id").value.trim();
     const driveFolderId = document.getElementById("google-drive-folder-id").value.trim();
+    const serviceAccountJson = document.getElementById("google-service-account-json").value.trim();
     const startingAddress = document.getElementById("google-starting-address").value.trim();
     
     try {
@@ -977,7 +979,8 @@ async function handleSaveGoogleSettings(event) {
                 client_secret: clientSecret, 
                 calendar_id: calendarId,
                 drive_folder_id: driveFolderId,
-                starting_address: startingAddress
+                starting_address: startingAddress,
+                service_account_json: serviceAccountJson
             })
         });
         if (response.ok) {

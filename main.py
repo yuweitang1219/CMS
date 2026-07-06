@@ -273,6 +273,7 @@ class SettingsGoogle(BaseModel):
     calendar_id: Optional[str] = "primary"
     drive_folder_id: Optional[str] = ""
     starting_address: Optional[str] = ""
+    service_account_json: Optional[str] = ""
 
 class SettingsLine(BaseModel):
     channel_access_token: str
@@ -569,6 +570,7 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
     g_calendar_id = database.get_setting("google_calendar_id", "primary")
     g_drive_folder_id = database.get_setting("google_drive_folder_id", "")
     g_starting_address = database.get_setting("google_starting_address", "")
+    g_service_account_json = database.get_setting("google_service_account_json", "")
     
     # Check if Google Calendar is connected (either via Service Account or OAuth)
     service, _ = get_calendar_service_from_env()
@@ -607,7 +609,8 @@ def get_settings(request: Request, current_user: str = Depends(get_current_user)
             "connected": g_connected,
             "email": g_email,
             "drive_folder_id": g_drive_folder_id,
-            "starting_address": g_starting_address
+            "starting_address": g_starting_address,
+            "service_account_json": g_service_account_json
         },
         "line": {
             "webhook_url": webhook_url,
@@ -653,6 +656,7 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     database.set_setting("google_calendar_id", clean_cal_id)
     database.set_setting("google_drive_folder_id", settings.drive_folder_id.strip() if settings.drive_folder_id else "")
     database.set_setting("google_starting_address", settings.starting_address.strip() if settings.starting_address else "")
+    database.set_setting("google_service_account_json", settings.service_account_json.strip() if settings.service_account_json else "")
     
     if credentials_changed:
         # Clear old tokens
@@ -665,7 +669,7 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     base_url = str(request.base_url).rstrip('/')
     redirect_uri = f"{base_url}/oauth2callback"
     
-    scopes = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email"
+    scopes = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file"
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={settings.client_id}&"
@@ -1916,6 +1920,36 @@ def debug_session():
         "main_lines": main_lines,
         "state": state,
         "google_settings_status": google_settings_status
+    }
+
+@app.get("/debug-drive")
+def debug_drive():
+    import os
+    from core.chatbot import load_session
+    from core.drive_helper import upload_plan_to_drive
+    user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
+    if not user_id:
+        return {"success": False, "error": "LINE_AUTHORIZED_USER_ID not configured"}
+        
+    state = load_session(user_id)
+    if not state or state.get("name") == "未提供資料":
+        return {"success": False, "error": "No valid state found for authorized user"}
+        
+    # Generate a simple plan preview
+    try:
+        from core.engine import generate_plan
+        result = generate_plan(state)
+        plan_preview = result.get("planText", "測試內容")
+    except Exception as e:
+        return {"success": False, "error": f"generate_plan failed: {e}"}
+        
+    drive_res = upload_plan_to_drive(state, plan_preview)
+    return {
+        "user_id": user_id,
+        "folder_id": database.get_setting("google_drive_folder_id"),
+        "sa_env_exists": "GOOGLE_SERVICE_ACCOUNT_JSON" in os.environ,
+        "sa_db_exists": bool(database.get_setting("google_service_account_json")),
+        "upload_result": drive_res
     }
 
 # --- STATIC FILE ROUTING ---

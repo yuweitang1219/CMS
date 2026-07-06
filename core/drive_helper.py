@@ -7,7 +7,8 @@ from google.oauth2 import service_account
 
 def upload_plan_to_drive(state, plan_text):
     """
-    Uploads the generated care plan to a shared Google Drive folder using the Service Account.
+    Uploads the generated care plan to a shared Google Drive folder.
+    Tries Google OAuth first, then falls back to GOOGLE_SERVICE_ACCOUNT_JSON.
     Automatically converts the uploaded file into a native, editable Google Doc.
     Returns a dict with 'success', 'file_id', and 'link'.
     """
@@ -19,26 +20,36 @@ def upload_plan_to_drive(state, plan_text):
         print("Google Drive Folder ID not configured in settings. Skipping upload.")
         return {"success": False, "error": "Folder ID not configured in database settings"}
         
-    # 2. Retrieve the Service Account JSON string from environment variables or database fallback
-    service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if not service_account_json_str:
-        service_account_json_str = database.get_setting("google_service_account_json")
-        
-    if not service_account_json_str:
-        print("Google Service Account credentials not found. Skipping upload.")
-        return {"success": False, "error": "Service account credentials not configured"}
-        
+    # 2. Try Google OAuth first
+    service = None
+    auth_error = None
     try:
-        # 3. Authenticate using the Service Account credentials
-        service_account_info = json.loads(service_account_json_str)
-        SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive']
-        credentials = service_account.Credentials.from_service_account_info(
-            service_account_info, scopes=SCOPES
-        )
-        service = build('drive', 'v3', credentials=credentials)
-    except Exception as e:
-        print(f"Error authenticating with Service Account for Google Drive: {e}")
-        return {"success": False, "error": f"Authentication failed: {str(e)}"}
+        from core.calendar_helper import get_oauth_drive_service
+        service = get_oauth_drive_service()
+    except Exception as oe:
+        print(f"Error building Google OAuth Drive service: {oe}")
+        auth_error = str(oe)
+        
+    # 3. Fallback to Service Account JSON if OAuth not configured/available
+    if not service:
+        service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        if not service_account_json_str:
+            service_account_json_str = database.get_setting("google_service_account_json")
+            
+        if not service_account_json_str:
+            print("Google credentials (OAuth and Service Account) not configured. Skipping upload.")
+            return {"success": False, "error": "Google 帳號未連結，且未設定服務帳號 (Service Account) 金鑰憑證。"}
+            
+        try:
+            service_account_info = json.loads(service_account_json_str)
+            SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive']
+            credentials = service_account.Credentials.from_service_account_info(
+                service_account_info, scopes=SCOPES
+            )
+            service = build('drive', 'v3', credentials=credentials)
+        except Exception as e:
+            print(f"Error authenticating with Service Account for Google Drive: {e}")
+            return {"success": False, "error": f"服務帳號驗證失敗: {str(e)}"}
         
     name = state.get("name", "計畫書")
     visit_date = state.get("visitDate")
@@ -102,4 +113,10 @@ def upload_plan_to_drive(state, plan_text):
         return {"success": True, "file_id": file_id, "link": web_link}
     except Exception as e:
         print(f"Error executing file creation on Google Drive API: {e}")
-        return {"success": False, "error": str(e)}
+        err_msg = str(e)
+        if "insufficient" in err_msg.lower() or "permission" in err_msg.lower():
+            return {
+                "success": False, 
+                "error": "Google 雲端硬碟寫入權限不足。請前往後台設定頁面，重新點選「連結 Google 帳號」，並在授權畫面中勾選「儲存與編輯您已透過此應用程式建立或開啟的 Google 雲端硬碟檔案 (drive.file)」權限。"
+            }
+        return {"success": False, "error": err_msg}
