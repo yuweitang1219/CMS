@@ -49,9 +49,20 @@ def generate_plan(state):
         
     hasF = bool(state.get('hasF', False))
     
-    active_services = set(state.get('activeServices', []))
-    service_times = state.get('serviceTimes', {})
-    custom_prices = state.get('customPrices', {})
+    # 確保 activeServices 為可迭代的 list
+    active_services_raw = state.get('activeServices')
+    if not isinstance(active_services_raw, list):
+        active_services_raw = [active_services_raw] if isinstance(active_services_raw, str) else []
+    active_services = set(active_services_raw)
+    
+    # 確保 serviceTimes 與 customPrices 為 dict
+    service_times = state.get('serviceTimes')
+    if not isinstance(service_times, dict):
+        service_times = {}
+        
+    custom_prices = state.get('customPrices')
+    if not isinstance(custom_prices, dict):
+        custom_prices = {}
 
     if statusVal == '3':
         custom_prices['OT'] = 0
@@ -68,8 +79,18 @@ def generate_plan(state):
         svc = next((s for s in LTC_SERVICES if s['code'] == code), None)
         if not svc:
             continue
-        times = int(service_times.get(code, 1))
-        price = int(custom_prices.get(code, svc['price']))
+            
+        # 安全轉型服務次數與自付價，避免 ValueError (例如空字串) 或 TypeError (例如 None)
+        try:
+            times = int(float(service_times.get(code, 1)))
+        except (ValueError, TypeError):
+            times = 1
+            
+        try:
+            price = int(float(custom_prices.get(code, svc['price'])))
+        except (ValueError, TypeError):
+            price = svc['price']
+            
         cost = price * times
         
         detail = {'code': code, 'desc': svc['desc'], 'times': times, 'price': price, 'cost': cost, 'type': svc['type'], 'evalReq': svc.get('evalReq', False)}
@@ -210,7 +231,13 @@ def generate_plan(state):
 
     # ----------------計畫書文字----------------
     def genStr(lst, def_msg):
-        return "、".join(lst) if lst else def_msg
+        if not lst:
+            return def_msg
+        if isinstance(lst, str):
+            return lst
+        if isinstance(lst, (list, tuple, set)):
+            return "、".join(str(x) for x in lst if x is not None)
+        return str(lst)
 
     condStr = genStr(state.get('selectedConditions', []), '無明顯重大慢性病史')
     senStr = genStr(state.get('selectedSensory', []), '感官均無明顯異常')
@@ -221,11 +248,14 @@ def generate_plan(state):
     def format_adl_grouped(data_dict):
         if not data_dict:
             return "無"
+        if not isinstance(data_dict, dict):
+            return str(data_dict)
+            
         groups = {}
         for k, v in data_dict.items():
             if not v:
                 continue
-            groups.setdefault(v, []).append(k)
+            groups.setdefault(str(v), []).append(str(k))
             
         parts = []
         ordered_levels = ["完全協助", "部分協助", "需要協助", "需協助", "獨立"]
@@ -278,11 +308,18 @@ def generate_plan(state):
 
     # 提取身心概況及主要照顧者之細部資料變數
 
-    gender = state.get('gender', '女')
-    if gender not in ['男', '女']:
-        if '男' in gender: gender = '男'
-        elif '女' in gender: gender = '女'
-        else: gender = '女'
+    # 防呆轉換性別欄位型態，避免非字串物件（例如 None 或 1）引發 TypeError
+    gender = state.get('gender')
+    if gender is not None:
+        gender_str = str(gender)
+        if gender_str not in ['男', '女']:
+            if '男' in gender_str: gender = '男'
+            elif '女' in gender_str: gender = '女'
+            else: gender = '女'
+        else:
+            gender = gender_str
+    else:
+        gender = '女'
 
     consciousness = state.get('consciousness', '清楚')
     interaction = state.get('interaction', '簡單對談')
@@ -291,9 +328,14 @@ def generate_plan(state):
     hearing = state.get('hearing', '正常')
     recentFalls = state.get('recentFalls', '近半年無')
     emotion = state.get('emotion', '穩定')
-    caregiverBirthYear = state.get('caregiverBirthYear', 'ＯＯ')
-    if caregiverBirthYear:
-        caregiverBirthYear = caregiverBirthYear.replace('年次', '').replace('年', '')
+    
+    # 確保主要照顧者出生年份轉為字串後處理，預防整數格式崩潰
+    caregiverBirthYear = state.get('caregiverBirthYear')
+    if caregiverBirthYear is not None:
+        caregiverBirthYear = str(caregiverBirthYear).replace('年次', '').replace('年', '')
+    else:
+        caregiverBirthYear = 'ＯＯ'
+        
     caregiverJob = state.get('caregiverJob', '退休')
     caregiverHealth = state.get('caregiverHealth', '無明顯不適')
     serviceUsageStatus = state.get('serviceUsageStatus', '服務穩定使用中')
