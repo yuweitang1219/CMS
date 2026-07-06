@@ -5,8 +5,10 @@ import bcrypt
 import database
 import secrets
 
+import os
+
 # Retrieve or generate JWT secret key to persist across server restarts
-JWT_SECRET = database.get_setting("jwt_secret")
+JWT_SECRET = os.environ.get("JWT_SECRET") or database.get_setting("jwt_secret")
 if not JWT_SECRET:
     JWT_SECRET = secrets.token_hex(32)
     database.set_setting("jwt_secret", JWT_SECRET)
