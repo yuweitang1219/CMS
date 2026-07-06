@@ -1304,8 +1304,11 @@ async def line_webhook(request: Request):
                     if drive_res.get("success"):
                         drive_url = drive_res.get("link")
                         drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
+                    else:
+                        drive_msg = f"\n\n⚠️ 雲端存檔失敗：{drive_res.get('error')}"
                 except Exception as de:
                     logger.error(f"Error in automatic Google Drive upload: {de}")
+                    drive_msg = f"\n\n⚠️ 雲端存檔失敗 (例外錯誤)：{str(de)}"
                     
                 plan_intro = plan_preview[:800] + "\n...（完整內容請下載 Word 檔）" if len(plan_preview) > 800 else plan_preview
                 reply_msg = (
@@ -1583,8 +1586,11 @@ async def line_webhook(request: Request):
                         if drive_res.get("success"):
                             drive_url = drive_res.get("link")
                             drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
+                        else:
+                            drive_msg = f"\n\n⚠️ 雲端存檔失敗：{drive_res.get('error')}"
                     except Exception as de:
                         logger.error(f"Error in automatic Google Drive upload: {de}")
+                        drive_msg = f"\n\n⚠️ 雲端存檔失敗 (例外錯誤)：{str(de)}"
                         
                     plan_intro = plan_preview[:800] + "\n...（完整內容請下載 Word 檔）" if len(plan_preview) > 800 else plan_preview
                     reply_msg = (
