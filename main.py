@@ -1608,7 +1608,13 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error generating plan: {e}")
                     reply_msg = f"生成計畫書時發生錯誤：{str(e)}\n請確認個案資料是否完整，或輸入「重新開始」重試。"
-        elif any(kw in user_text for kw in ["建立行事曆", "新增行事曆", "加入行事曆", "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", "建立行程", "新增行程", "加入行程", "排程", "加行程"]) and len(user_text) < 12:
+        elif any(kw in user_text for kw in [
+            "建立行事曆", "新增行事曆", "增加行事曆", "加入行事曆", "加行事曆", 
+            "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", 
+            "建立行程", "新增行程", "加入行程", "排程", "加行程", "增加行程", 
+            "排入行程", "排行程", "加入日曆", "同步日曆", "建立日曆", "新增日曆", 
+            "排日曆", "排入日曆", "同步到日曆"
+        ]) and len(user_text) < 12:
             calendar_flow_res = run_calendar_sync_flow()
             if calendar_flow_res == "__HANDLED__":
                 return
@@ -1728,7 +1734,13 @@ async def line_webhook(request: Request):
                 reply_msg = process_chat(user_id, user_text, gemini_api_key)
                 
                 # 2. Check if the message contains a calendar keyword. If yes, auto-trigger calendar flow!
-                calendar_kws = ["建立行事曆", "新增行事曆", "加入行事曆", "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", "建立行程", "新增行程", "加入行程", "排程", "加行程"]
+                calendar_kws = [
+                    "建立行事曆", "新增行事曆", "增加行事曆", "加入行事曆", "加行事曆", 
+                    "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", 
+                    "建立行程", "新增行程", "加入行程", "排程", "加行程", "增加行程", 
+                    "排入行程", "排行程", "加入日曆", "同步日曆", "建立日曆", "新增日曆", 
+                    "排日曆", "排入日曆", "同步到日曆"
+                ]
                 if any(kw in user_text for kw in calendar_kws):
                     calendar_flow_res = run_calendar_sync_flow()
                     if calendar_flow_res == "__HANDLED__":
