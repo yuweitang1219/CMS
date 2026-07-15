@@ -14,8 +14,8 @@ def upload_plan_to_drive(state, plan_text):
     """
     import database
     
-    # 1. Retrieve the Google Drive Shared Folder ID from database settings
-    folder_id = database.get_setting("google_drive_folder_id")
+    # 1. Retrieve the Google Drive Shared Folder ID from database settings or env var
+    folder_id = database.get_setting("google_drive_folder_id") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
     if not folder_id:
         print("Google Drive Folder ID not configured in settings. Skipping upload.")
         return {"success": False, "error": "Folder ID not configured in database settings"}
