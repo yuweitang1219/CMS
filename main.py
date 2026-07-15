@@ -723,11 +723,11 @@ def save_line_settings(settings: SettingsLine, current_user: str = Depends(get_c
 
 @app.get("/oauth2callback", response_class=HTMLResponse)
 def oauth2callback(code: str, request: Request):
-    client_id = database.get_setting("google_client_id")
-    client_secret = database.get_setting("google_client_secret")
+    client_id = database.get_setting("google_client_id") or os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = database.get_setting("google_client_secret") or os.environ.get("GOOGLE_CLIENT_SECRET")
     
     if not client_id or not client_secret:
-        return HTMLResponse("Error: Google Calendar settings missing in database.", status_code=400)
+        return HTMLResponse("Error: Google Calendar settings missing in database or environment.", status_code=400)
         
     base_url = str(request.base_url).rstrip('/')
     redirect_uri = f"{base_url}/oauth2callback"
