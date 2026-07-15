@@ -470,6 +470,22 @@ def report_js_error(payload: JsErrorPayload):
 def get_js_errors():
     return js_errors
 
+@app.get("/api/debug/test-drive")
+def test_drive_upload():
+    """Test endpoint to verify Google Drive upload is working."""
+    try:
+        from core.drive_helper import upload_plan_to_drive
+        test_state = {
+            "name": "測試個案",
+            "visitDate": "2026-07-16",
+            "planType": "AA01"
+        }
+        test_text = "【測試上傳】\n這是一份測試計畫書，用於驗證 Google Drive 自動上傳功能是否正常運作。\n如您看到這份文件，代表設定成功！"
+        result = upload_plan_to_drive(test_state, test_text)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     has_users = database.has_users()
