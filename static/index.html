@@ -299,7 +299,7 @@
 
                 <!-- Google Calendar Section -->
                 <div class="settings-section">
-                    <h3><i class="fa-brands fa-google"></i> Google 日曆 API 串接</h3>
+                    <h3><i class="fa-brands fa-google"></i> Google 日曆與雲端設定</h3>
                     
                     <div id="google-status-connected" class="api-status-card connected hidden">
                         <div class="status-indicator-dot"></div>
@@ -314,81 +314,56 @@
                         <div class="status-indicator-dot"></div>
                         <div class="status-info">
                             <span class="status-title">Google 帳戶未授權</span>
-                            <span class="status-desc">請填寫下方 OAuth 資訊以進行連線</span>
+                            <span class="status-desc">請點擊下方按鈕以連結您的帳號</span>
                         </div>
                     </div>
 
                     <form id="google-settings-form" onsubmit="handleSaveGoogleSettings(event)" class="settings-form">
+                        <!-- Hidden inputs for client credentials since they are in environment variables -->
+                        <div style="display: none;">
+                            <input type="password" id="google-client-id" value="">
+                            <input type="password" id="google-client-secret" value="">
+                            <textarea id="google-service-account-json"></textarea>
+                        </div>
+
                         <div class="input-group">
-                            <label for="google-client-id">Google Client ID (已設定環境變數時可留空)</label>
-                            <input type="password" id="google-client-id" placeholder="輸入 Google 專案的 Client ID" autocomplete="off">
+                            <label for="google-calendar-id">Google Calendar ID (行事曆 ID)</label>
+                            <input type="text" id="google-calendar-id" placeholder="留空預設為主要日曆 (primary)" autocomplete="off">
                         </div>
                         <div class="input-group">
-                            <label for="google-client-secret">Google Client Secret (已設定環境變數時可留空)</label>
-                            <input type="password" id="google-client-secret" placeholder="輸入 Google 專案的 Client Secret" autocomplete="off">
-                        </div>
-                        <div class="input-group">
-                            <label for="google-calendar-id">Google Calendar ID (選填，預設為主要日曆)</label>
-                            <input type="text" id="google-calendar-id" placeholder="留空預設為 primary；特定日曆請輸入 xxxx@group.calendar.google.com" autocomplete="off">
-                        </div>
-                        <div class="input-group">
-                            <label for="google-drive-folder-id">Google Drive 雲端共用資料夾 ID (選填，方案 A)</label>
+                            <label for="google-drive-folder-id">Google Drive 雲端共用資料夾 ID</label>
                             <input type="text" id="google-drive-folder-id" placeholder="例如：1aBcDeFgHiJkLmNoPqRsTuVwXyZ" autocomplete="off">
-                            <span class="input-helper" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: block;">
-                                💡 請先將該雲端資料夾共用給此服務帳號，並給予編輯者權限：<br><strong id="service-account-email-display" style="color: var(--accent-purple); word-break: break-all;">載入中...</strong>
-                            </span>
-                        </div>
-                        <div class="input-group">
-                            <label for="google-service-account-json">Google Service Account 金鑰 JSON (選填，方案 A)</label>
-                            <textarea id="google-service-account-json" rows="4" placeholder='黏貼您的服務帳號金鑰 JSON 內容，例如：{"type": "service_account", ...}' style="font-family: monospace; font-size: 0.9rem;"></textarea>
                         </div>
                         <div class="input-group">
                             <label for="google-starting-address">服務起點地址 (選填，用於計算家訪車程)</label>
                             <input type="text" id="google-starting-address" placeholder="例如：桃園市中壢區健行路229號" autocomplete="off">
-                            <span class="input-helper" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; display: block;">
-                                💡 當個案也設有地址時，同步行事曆會自動計算以此為起點的開車交通車程。
-                            </span>
                         </div>
+                        
                         <div class="settings-action-row">
-                            <a href="https://console.cloud.google.com/" target="_blank" class="link-btn"><i class="fa-solid fa-up-right-from-square"></i> 開啟 Google Cloud Console</a>
-                            <button type="submit" class="btn btn-primary">儲存並進行 Google 授權</button>
+                            <button type="submit" class="btn btn-primary">儲存日曆設定並連結帳號</button>
                         </div>
                     </form>
-                    
-                    <div class="setup-guide">
-                        <h4>💡 Google API 設定步驟：</h4>
-                        <ol>
-                            <li>進入 Google Cloud Console 建立新專案。</li>
-                            <li>啟用 <strong>Google Calendar API</strong>。</li>
-                            <li>在「OAuth 同意畫面」設定為外部，並加入您的 Google 測試帳號。</li>
-                            <li>建立「OAuth 2.0 用戶端 ID」，應用程式類型選擇「網頁應用程式」。</li>
-                            <li>在<strong>已授權的重新導向 URI</strong> 中新增：
-                                <code id="google-redirect-uri-display">http://localhost:8000/oauth2callback</code>
-                            </li>
-                            <li>複製 Client ID 與 Client Secret，填入上方並點選儲存。</li>
-                        </ol>
-                    </div>
                 </div>
 
                 <hr class="settings-divider">
 
                 <!-- Line Bot Section -->
                 <div class="settings-section">
-                    <h3><i class="fa-brands fa-line"></i> Line Bot 遠端新增待辦事項</h3>
+                    <h3><i class="fa-brands fa-line"></i> Line Bot 串接設定</h3>
                     
                     <div id="line-status-connected" class="api-status-card connected hidden">
                         <div class="status-indicator-dot"></div>
                         <div class="status-info">
-                            <span class="status-title">Line Webhook 機制已啟用</span>
-                            <span class="status-desc">現在可以透過您的 Line Bot 傳送訊息了！</span>
+                            <span class="status-title">Line Webhook 機制運作中</span>
+                            <span class="status-desc">已成功同步 Line 遠端機器人</span>
                         </div>
                     </div>
 
-                    <div id="line-status-disconnected" class="api-status-card disconnected">
+                    <div id="line-status-disconnected" class="api-status-card disconnected hidden">
                         <div class="status-indicator-dot"></div>
                         <div class="status-info">
-                            <span class="status-title">Line Webhook 未啟用</span>
-                            <span class="status-desc">請填寫下方 Line Developers 憑證</span>
+                            <span class="status-title">Line 未啟動</span>
+                            <span class="status-desc">請檢查雲端環境變數是否設定正確</span>
                         </div>
                     </div>
 
@@ -400,37 +375,21 @@
                                 <button type="button" class="btn btn-secondary" onclick="copyWebhookUrl()"><i class="fa-solid fa-copy"></i> 複製</button>
                             </div>
                         </div>
-                        <div class="input-group">
-                            <label for="line-channel-token">Channel Access Token</label>
-                            <input type="password" id="line-channel-token" placeholder="輸入 Line Messaging API 的 Channel Access Token" required autocomplete="off">
+
+                        <!-- Hidden Line credentials since they are permanently managed in Render Environment -->
+                        <div style="display: none;">
+                            <input type="password" id="line-channel-token" value="placeholder">
+                            <input type="password" id="line-channel-secret" value="placeholder">
+                            <input type="password" id="line-user-id" value="placeholder">
+                            <input type="password" id="gemini-api-key" value="placeholder">
                         </div>
-                        <div class="input-group">
-                            <label for="line-channel-secret">Channel Secret</label>
-                            <input type="password" id="line-channel-secret" placeholder="輸入 Line Channel Secret" required autocomplete="off">
+
+                        <div class="settings-action-row" style="margin-top: 10px;">
+                            <span class="input-helper" style="font-size: 0.85rem; color: var(--text-muted);">
+                                💡 LINE 機器人的存取憑證與金鑰已加密保存在雲端主機中，確保您的個人資料安全。
+                            </span>
                         </div>
-                        <div class="input-group">
-                            <label for="line-user-id">您的 LINE User ID (高度安全性限制)</label>
-                            <input type="password" id="line-user-id" placeholder="輸入您的個人 LINE User ID，以防他人隨意新增待辦事項" required autocomplete="off">
-                        </div>
-                        <div class="input-group">
-                            <label for="gemini-api-key">Gemini API Key (長照 AI 計畫書對話所需)</label>
-                            <input type="password" id="gemini-api-key" placeholder="輸入您的 Google AI Studio Gemini API Key" autocomplete="off">
-                        </div>
-                        <button type="submit" class="btn btn-primary">儲存 Line 設定</button>
                     </form>
-                    
-                    <div class="setup-guide">
-                        <h4>💡 Line Bot 設定步驟：</h4>
-                        <ol>
-                            <li>登入 <a href="https://developers.line.biz/" target="_blank">Line Developers</a> 建立一個 Provider。</li>
-                            <li>建立一個 <strong>Messaging API</strong> Channel。</li>
-                            <li>在 Channel 設定中取得 <strong>Channel Secret</strong>。</li>
-                            <li>在 Messaging API 頁籤最下方發行並取得 <strong>Channel Access Token</strong>。</li>
-                            <li>將上方的 Webhook 網址複製，並貼到 Line Console 的 <strong>Webhook URL</strong>，並開啟 <strong>Use webhook</strong> 功能。</li>
-                            <li>在 Line Developers 帳號設定頁面中找到您的 <strong>Your user ID</strong> 並填入上方（這能確保只有您能呼叫此機器人）。</li>
-                            <li>儲存後，用手機掃描 Line Messaging API 的 QR Code 加入好友，即可透過對話傳送任務！</li>
-                        </ol>
-                    </div>
                 </div>
 
             </div>
