@@ -474,7 +474,24 @@ def get_js_errors():
 def test_drive_upload():
     """Test endpoint to verify Google Drive upload is working."""
     try:
+        import os
+        import database
         from core.drive_helper import upload_plan_to_drive
+        
+        cid = database.get_setting("google_client_id") or os.environ.get("GOOGLE_CLIENT_ID")
+        sec = database.get_setting("google_client_secret") or os.environ.get("GOOGLE_CLIENT_SECRET")
+        ref = database.get_setting("google_refresh_token") or os.environ.get("GOOGLE_REFRESH_TOKEN")
+        folder = database.get_setting("google_drive_folder_id") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+        
+        debug_info = {
+            "has_client_id": bool(cid),
+            "has_client_secret": bool(sec),
+            "has_refresh_token": bool(ref),
+            "folder_id": folder,
+            "client_id_prefix": cid[:10] if cid else None,
+            "refresh_token_prefix": ref[:10] if ref else None,
+        }
+        
         test_state = {
             "name": "測試個案",
             "visitDate": "2026-07-16",
@@ -482,7 +499,10 @@ def test_drive_upload():
         }
         test_text = "【測試上傳】\n這是一份測試計畫書，用於驗證 Google Drive 自動上傳功能是否正常運作。\n如您看到這份文件，代表設定成功！"
         result = upload_plan_to_drive(test_state, test_text)
-        return result
+        return {
+            "upload_result": result,
+            "debug_info": debug_info
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
