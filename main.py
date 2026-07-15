@@ -268,8 +268,8 @@ class TodoUpdate(BaseModel):
     completed: Optional[bool] = None
 
 class SettingsGoogle(BaseModel):
-    client_id: str
-    client_secret: str
+    client_id: Optional[str] = ""
+    client_secret: Optional[str] = ""
     calendar_id: Optional[str] = "primary"
     drive_folder_id: Optional[str] = ""
     starting_address: Optional[str] = ""
@@ -642,8 +642,20 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     old_client_id = database.get_setting("google_client_id", "")
     old_client_secret = database.get_setting("google_client_secret", "")
     
+    client_id_val = settings.client_id.strip() if settings.client_id else ""
+    client_secret_val = settings.client_secret.strip() if settings.client_secret else ""
+    
+    effective_client_id = client_id_val or old_client_id or os.environ.get("GOOGLE_CLIENT_ID", "")
+    effective_client_secret = client_secret_val or old_client_secret or os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    
+    if not effective_client_id or not effective_client_secret:
+        raise HTTPException(
+            status_code=400,
+            detail="Google Client ID and Client Secret are missing. Please configure them in Render environment variables or settings."
+        )
+        
     # Only clear tokens if the client credentials themselves changed
-    credentials_changed = (old_client_id != settings.client_id) or (old_client_secret != settings.client_secret)
+    credentials_changed = (old_client_id != client_id_val and client_id_val != "") or (old_client_secret != client_secret_val and client_secret_val != "")
     
     import urllib.parse
     
@@ -667,8 +679,8 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     logger.info(f"DEBUG SAVE: raw calendar_id from settings: '{settings.calendar_id}'")
     logger.info(f"DEBUG SAVE: clean_cal_id: '{clean_cal_id}'")
     
-    database.set_setting("google_client_id", settings.client_id)
-    database.set_setting("google_client_secret", settings.client_secret)
+    database.set_setting("google_client_id", client_id_val)
+    database.set_setting("google_client_secret", client_secret_val)
     database.set_setting("google_calendar_id", clean_cal_id)
     database.set_setting("google_drive_folder_id", settings.drive_folder_id.strip() if settings.drive_folder_id else "")
     database.set_setting("google_starting_address", settings.starting_address.strip() if settings.starting_address else "")
@@ -688,7 +700,7 @@ def save_google_settings(settings: SettingsGoogle, request: Request, current_use
     scopes = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file"
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={settings.client_id}&"
+        f"client_id={effective_client_id}&"
         f"redirect_uri={redirect_uri}&"
         f"response_type=code&"
         f"scope={scopes}&"
