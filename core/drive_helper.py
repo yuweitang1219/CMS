@@ -110,6 +110,38 @@ def upload_plan_to_drive(state, plan_text):
         web_link = file.get('webViewLink')
         
         print(f"File uploaded successfully to Google Drive. ID: {file_id}, Link: {web_link}")
+        
+        # 7. Transfer ownership to the user's primary email if configured (to prevent service account quota issues)
+        user_email = database.get_setting("google_user_email") or os.environ.get("GOOGLE_USER_EMAIL")
+        if user_email:
+            try:
+                # Grant owner permission (requires transferOwnership=True)
+                service.permissions().create(
+                    fileId=file_id,
+                    body={
+                        'role': 'owner',
+                        'type': 'user',
+                        'emailAddress': user_email
+                    },
+                    transferOwnership=True
+                ).execute()
+                print(f"File ownership transferred to {user_email}")
+            except Exception as pe:
+                print(f"Warning: Failed to transfer file ownership to {user_email}: {pe}")
+                # Fallback: grant writer permission so the user can still edit it
+                try:
+                    service.permissions().create(
+                        fileId=file_id,
+                        body={
+                            'role': 'writer',
+                            'type': 'user',
+                            'emailAddress': user_email
+                        }
+                    ).execute()
+                    print(f"Granted fallback writer permission to {user_email}")
+                except Exception as fe:
+                    print(f"Warning: Failed to grant writer permission to {user_email}: {fe}")
+                    
         return {"success": True, "file_id": file_id, "link": web_link}
     except Exception as e:
         print(f"Error executing file creation on Google Drive API: {e}")

@@ -10,11 +10,11 @@ def get_oauth_service(calendar_id):
     import requests
     from google.oauth2.credentials import Credentials
     
-    client_id = database.get_setting("google_client_id")
-    client_secret = database.get_setting("google_client_secret")
-    refresh_token = database.get_setting("google_refresh_token")
-    access_token = database.get_setting("google_access_token")
-    expiry_str = database.get_setting("google_token_expiry")
+    client_id = database.get_setting("google_client_id") or os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = database.get_setting("google_client_secret") or os.environ.get("GOOGLE_CLIENT_SECRET")
+    refresh_token = database.get_setting("google_refresh_token") or os.environ.get("GOOGLE_REFRESH_TOKEN")
+    access_token = database.get_setting("google_access_token") or os.environ.get("GOOGLE_ACCESS_TOKEN")
+    expiry_str = database.get_setting("google_token_expiry") or os.environ.get("GOOGLE_TOKEN_EXPIRY")
     
     if not client_id or not client_secret or not refresh_token:
         return None
@@ -77,11 +77,11 @@ def get_oauth_drive_service():
     import requests
     from google.oauth2.credentials import Credentials
     
-    client_id = database.get_setting("google_client_id")
-    client_secret = database.get_setting("google_client_secret")
-    refresh_token = database.get_setting("google_refresh_token")
-    access_token = database.get_setting("google_access_token")
-    expiry_str = database.get_setting("google_token_expiry")
+    client_id = database.get_setting("google_client_id") or os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = database.get_setting("google_client_secret") or os.environ.get("GOOGLE_CLIENT_SECRET")
+    refresh_token = database.get_setting("google_refresh_token") or os.environ.get("GOOGLE_REFRESH_TOKEN")
+    access_token = database.get_setting("google_access_token") or os.environ.get("GOOGLE_ACCESS_TOKEN")
+    expiry_str = database.get_setting("google_token_expiry") or os.environ.get("GOOGLE_TOKEN_EXPIRY")
     
     if not client_id or not client_secret or not refresh_token:
         return None
