@@ -767,17 +767,95 @@ def oauth2callback(code: str, request: Request):
             email = user_response.json().get("email", "")
             database.set_setting("google_user_email", email)
             
-        # Redirect back to home via javascript
-        return HTMLResponse("""
-            <html>
+        # Show a helpful success screen if refresh token exists, else auto-redirect
+        if refresh_token:
+            return HTMLResponse(f"""
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Google 授權成功</title>
+                    <style>
+                        body {{
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                            background: #0f0c1b;
+                            color: #e2e8f0;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            height: 100vh;
+                            margin: 0;
+                        }}
+                        .card {{
+                            background: rgba(255, 255, 255, 0.03);
+                            border: 1px solid rgba(255, 255, 255, 0.08);
+                            border-radius: 16px;
+                            padding: 30px;
+                            max-width: 500px;
+                            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+                            backdrop-filter: blur(10px);
+                            text-align: center;
+                        }}
+                        h2 {{
+                            color: #06d6a0;
+                            margin-top: 0;
+                        }}
+                        p {{
+                            font-size: 0.95rem;
+                            line-height: 1.6;
+                            color: #a0aec0;
+                        }}
+                        .token-box {{
+                            background: rgba(0,0,0,0.4);
+                            border: 1px solid rgba(255,255,255,0.1);
+                            padding: 12px;
+                            border-radius: 8px;
+                            font-family: monospace;
+                            font-size: 0.85rem;
+                            word-break: break-all;
+                            margin: 20px 0;
+                            color: #e0aaff;
+                            user-select: all;
+                            text-align: left;
+                        }}
+                        .btn {{
+                            background: linear-gradient(135deg, #818cf8, #9d4ede);
+                            color: white;
+                            border: none;
+                            padding: 12px 28px;
+                            border-radius: 8px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            text-decoration: none;
+                            display: inline-block;
+                        }}
+                        .btn:hover {{
+                            opacity: 0.95;
+                        }}
+                    </style>
+                </head>
                 <body>
-                    <p>Authorization successful! Redirecting to dashboard...</p>
-                    <script>
-                        window.location.href = '/';
-                    </script>
+                    <div class="card">
+                        <h2>🎉 Google 連結成功！</h2>
+                        <p>為避免 Render 免費版重啟時需要重新授權，請複製下方的 <strong>Refresh Token</strong> 並設定至 Render 後台的環境變數：</p>
+                        <div style="text-align: left; font-size: 0.85rem; color: #cbd5e0; margin-bottom: 5px;">名稱 (Key)：<strong>GOOGLE_REFRESH_TOKEN</strong></div>
+                        <div class="token-box">{refresh_token}</div>
+                        <p>（設定完成後，日曆與雲端硬碟即可永久同步運行！）</p>
+                        <a href="/" class="btn">我已複製，返回儀表板</a>
+                    </div>
                 </body>
-            </html>
-        """)
+                </html>
+            """)
+        else:
+            return HTMLResponse("""
+                <html>
+                    <body>
+                        <p>Authorization successful! Redirecting to dashboard...</p>
+                        <script>
+                            window.location.href = '/';
+                        </script>
+                    </body>
+                </html>
+            """)
         
     except Exception as e:
         logger.error(f"Error during OAuth callback: {e}")
