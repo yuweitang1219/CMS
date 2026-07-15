@@ -831,10 +831,12 @@ def list_calendar_events(background_tasks: BackgroundTasks, current_user: str = 
     service, calendar_id = get_calendar_service_from_env()
     if service:
         try:
-            time_min = (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+            time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
+            time_max = (datetime.utcnow() + timedelta(days=90)).isoformat() + "Z"
             events_result = service.events().list(
                 calendarId=calendar_id,
                 timeMin=time_min,
+                timeMax=time_max,
                 singleEvents=True,
                 orderBy='startTime',
                 maxResults=1000
@@ -864,12 +866,14 @@ def list_calendar_events(background_tasks: BackgroundTasks, current_user: str = 
     if not token:
         return {"error": "not_authorized", "events": []}
         
-    time_min = (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+    time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
+    time_max = (datetime.utcnow() + timedelta(days=90)).isoformat() + "Z"
     calendar_id = database.get_setting("google_calendar_id", "primary")
     url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
     headers = {"Authorization": f"Bearer {token}"}
     params = {
         "timeMin": time_min,
+        "timeMax": time_max,
         "singleEvents": "true",
         "orderBy": "startTime",
         "maxResults": 1000
