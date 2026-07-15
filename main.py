@@ -503,6 +503,9 @@ def test_drive_upload():
             "upload_result": result,
             "debug_info": debug_info
         }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/debug/clear-db-tokens")
 def clear_db_tokens():
     """Clear cached Google OAuth tokens from database to force fallback to environment variables."""
