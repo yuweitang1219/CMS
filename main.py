@@ -503,6 +503,15 @@ def test_drive_upload():
             "upload_result": result,
             "debug_info": debug_info
         }
+@app.get("/api/debug/clear-db-tokens")
+def clear_db_tokens():
+    """Clear cached Google OAuth tokens from database to force fallback to environment variables."""
+    try:
+        import database
+        database.set_setting("google_access_token", None)
+        database.set_setting("google_refresh_token", None)
+        database.set_setting("google_token_expiry", None)
+        return {"success": True, "message": "Database tokens cleared. Server will now read from environment variables."}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
