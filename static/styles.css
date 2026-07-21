@@ -974,6 +974,7 @@ input:focus, select:focus, textarea:focus {
 .events-timeline {
     display: flex;
     flex-direction: column;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
 }
@@ -982,7 +983,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     flex-shrink: 0;
 }
 
@@ -992,6 +993,9 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
     letter-spacing: 0.5px;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Hide inline fullscreen button by default (only show in fullscreen) */
@@ -1000,12 +1004,50 @@ input:focus, select:focus, textarea:focus {
 }
 
 .events-list {
-    max-height: 380px;
+    flex: 1;
+    max-height: none;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     padding-right: 5px;
+}
+
+/* Split Vertical Right Card (Upper: Events, Lower: Todos) */
+.todo-card.split-vertical-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.split-card-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.split-card-section.upper-section {
+    flex: 1;
+    min-height: 200px;
+}
+
+.split-card-section.lower-section {
+    flex: 1.2;
+    min-height: 240px;
+}
+
+.split-section-divider {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%);
+    margin: 6px 0;
+    flex-shrink: 0;
+}
+
+.split-card-section .todo-list-container {
+    flex: 1;
+    max-height: 280px;
+    overflow-y: auto;
 }
 
 .event-item {

@@ -28,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=9.0">
+    <link rel="stylesheet" href="/styles.css?v=10.0">
 </head>
 <body>
     
@@ -191,11 +191,16 @@
                             <!-- Dynamic days -->
                         </div>
                     </div>
+                </div>
+            </section>
 
-                    <!-- Upcoming Events List -->
+            <!-- Right Side: Vertical Card Split into Upper (Upcoming Events) and Lower (To-Dos) -->
+            <section class="grid-card todo-card split-vertical-card">
+                <!-- Upper Half: 接下來的行程 -->
+                <div class="split-card-section upper-section">
                     <div class="events-timeline">
                         <div class="events-timeline-header">
-                            <h3>接下來的行程</h3>
+                            <h3><i class="fa-solid fa-clock-rotate-left icon-accent-calendar"></i> 接下來的行程</h3>
                             <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
                                 <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
                             </button>
@@ -209,32 +214,33 @@
                         </div>
                     </div>
                 </div>
-            </section>
 
-            <!-- Right Side: To-Do Manager -->
-            <section class="grid-card todo-card">
-                <div class="card-header">
-                    <div class="header-title">
-                        <i class="fa-solid fa-list-check icon-accent-todo"></i>
-                        <h2>待辦事項</h2>
-                    </div>
-                    <div class="todo-progress-container">
-                        <div class="progress-ring-box">
-                            <svg class="progress-ring" width="46" height="46">
-                                <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
-                                <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
-                                <defs>
-                                    <linearGradient id="todo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stop-color="#ff8c00" />
-                                        <stop offset="100%" stop-color="#ff007f" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
-                            <span id="todo-progress-percentage" class="progress-text">0%</span>
+                <div class="split-section-divider"></div>
+
+                <!-- Lower Half: 待辦事項 -->
+                <div class="split-card-section lower-section">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i class="fa-solid fa-list-check icon-accent-todo"></i>
+                            <h2>待辦事項</h2>
                         </div>
-                        <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                        <div class="todo-progress-container">
+                            <div class="progress-ring-box">
+                                <svg class="progress-ring" width="46" height="46">
+                                    <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
+                                    <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
+                                    <defs>
+                                        <linearGradient id="todo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#ff8c00" />
+                                            <stop offset="100%" stop-color="#ff007f" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
+                                <span id="todo-progress-percentage" class="progress-text">0%</span>
+                            </div>
+                            <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                        </div>
                     </div>
-                </div>
 
                 <!-- Add Todo Form -->
                 <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form hidden">
@@ -272,6 +278,7 @@
                     <ul id="todo-list" class="todo-list">
                         <!-- Dynamic items -->
                     </ul>
+                </div>
                 </div>
             </section>
         </main>
@@ -440,6 +447,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=9.0"></script>
+    <script src="/app.js?v=10.0"></script>
 </body>
 </html>
