@@ -1666,10 +1666,33 @@ html:fullscreen .dashboard-container {
     gap: 0 !important;
 }
 
-/* Hide entire header in fullscreen to maximize space */
+/* Slim top bar in fullscreen mode to display Weather and Clock */
 :fullscreen .dashboard-header,
 html:fullscreen .dashboard-header {
-    display: none !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 6px 16px !important;
+    margin-bottom: 8px !important;
+    background: rgba(15, 23, 42, 0.4) !important;
+    border-radius: 12px !important;
+    backdrop-filter: blur(10px) !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
+}
+
+:fullscreen .dashboard-header h1,
+html:fullscreen .dashboard-header h1 {
+    font-size: 1.1rem !important;
+}
+
+:fullscreen .clock-box,
+html:fullscreen .clock-box,
+:fullscreen .weather-box,
+html:fullscreen .weather-box {
+    padding: 4px 12px !important;
+    font-size: 0.85rem !important;
 }
 
 :fullscreen #mini-calendar-clock,
@@ -1687,7 +1710,7 @@ html:fullscreen #fullscreen-btn-inline {
 html:fullscreen .dashboard-grid {
     grid-template-columns: 1.35fr 0.65fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 12px) !important;
+    height: calc(100vh - 68px) !important;
     overflow: hidden !important;
     gap: 12px !important;
 }
