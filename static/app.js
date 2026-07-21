@@ -714,35 +714,14 @@ function renderEvents() {
         const todoContainer = document.querySelector('.todo-card');
         listEl.innerHTML = "";
 
-        const now = new Date();
-        const isSelectedDateToday = state.selectedDate.toDateString() === now.toDateString();
-
         // Filter events for selected day
         const events = state.events || [];
         const dayEvents = events.filter(event => {
             if (!event || !event.start) return false;
-            const startStr = event.start.dateTime || event.start.date;
-            if (!startStr) return false;
-            const eventStartDate = new Date(startStr);
-            if (eventStartDate.toDateString() !== state.selectedDate.toDateString()) {
-                return false;
-            }
-
-            // If selected date is TODAY, filter out events whose time slot has ALREADY PASSED!
-            if (isSelectedDateToday) {
-                if (event.end && event.end.dateTime) {
-                    const eventEndDate = new Date(event.end.dateTime);
-                    if (now > eventEndDate) {
-                        return false; // Time slot has passed -> hide from "接下來的行程" on dashboard
-                    }
-                } else if (event.start && event.start.dateTime) {
-                    const eventStartDate = new Date(event.start.dateTime);
-                    if (now.getTime() > eventStartDate.getTime() + 3600000) {
-                        return false;
-                    }
-                }
-            }
-            return true;
+            const start = event.start.dateTime || event.start.date;
+            if (!start) return false;
+            const eventDate = new Date(start);
+            return eventDate.toDateString() === state.selectedDate.toDateString();
         });
 
         const isFullscreen = !!document.fullscreenElement;
