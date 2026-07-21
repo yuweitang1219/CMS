@@ -1667,11 +1667,11 @@ html:fullscreen #fullscreen-btn-inline {
 
 :fullscreen .dashboard-grid,
 html:fullscreen .dashboard-grid {
-    grid-template-columns: 4fr 1fr !important;
+    grid-template-columns: 1.35fr 0.65fr !important;
     grid-template-rows: 1fr !important;
-    height: calc(100vh - 8px) !important;
+    height: calc(100vh - 12px) !important;
     overflow: hidden !important;
-    gap: 4px !important;
+    gap: 12px !important;
 }
 
 :fullscreen .grid-card,
@@ -1679,13 +1679,15 @@ html:fullscreen .grid-card {
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
-    padding: 4px !important;
-    border-radius: 10px !important;
+    padding: 14px !important;
+    border-radius: 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 :fullscreen .grid-card .card-header,
 html:fullscreen .grid-card .card-header {
-    display: none !important;
+    display: flex !important;
 }
 
 :fullscreen .calendar-inner-grid,
