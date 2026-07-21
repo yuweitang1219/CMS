@@ -970,25 +970,11 @@ input:focus, select:focus, textarea:focus {
     color: white;
 }
 
-/* Timeline & Event List (Split Upper & Lower) */
+/* Timeline & Event List */
 .events-timeline {
     display: flex;
     flex-direction: column;
-    height: 100%;
     min-height: 0;
-    gap: 14px;
-    overflow: hidden;
-}
-
-.events-timeline-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 12px 14px;
     overflow: hidden;
 }
 
@@ -996,7 +982,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     flex-shrink: 0;
 }
 
@@ -1006,9 +992,6 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
     letter-spacing: 0.5px;
     margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 /* Hide inline fullscreen button by default (only show in fullscreen) */
@@ -1017,13 +1000,12 @@ input:focus, select:focus, textarea:focus {
 }
 
 .events-list {
-    flex: 1;
-    max-height: none;
+    max-height: 380px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding-right: 4px;
+    gap: 12px;
+    padding-right: 5px;
 }
 
 .event-item {
@@ -1452,7 +1434,7 @@ input:focus, select:focus, textarea:focus {
     }
 
     .dashboard-grid {
-        grid-template-columns: 1fr; /* Stacked Top and Bottom */
+        grid-template-columns: 1.4fr 0.6fr; /* Side-by-side */
         grid-template-rows: auto;
         gap: 20px;
         height: auto !important;
@@ -1460,20 +1442,20 @@ input:focus, select:focus, textarea:focus {
 
     .calendar-card {
         height: auto !important;
-        min-height: 480px !important;
+        min-height: 540px !important;
         max-height: none !important;
     }
 
     .todo-card {
         height: auto !important;
-        min-height: 480px !important;
+        min-height: 540px !important;
         max-height: none !important;
     }
     
     .events-timeline {
         margin-top: 15px;
         height: auto !important;
-        max-height: none;
+        max-height: 460px;
         overflow-y: auto;
     }
     
@@ -1500,7 +1482,7 @@ input:focus, select:focus, textarea:focus {
     }
 
     .dashboard-grid {
-        grid-template-columns: 1fr; /* Stacked Top and Bottom */
+        grid-template-columns: 1.35fr 0.65fr; /* Side-by-side */
         grid-template-rows: auto;
         gap: 16px;
         height: auto !important;
@@ -1643,33 +1625,33 @@ html:fullscreen #fullscreen-btn-inline {
 
 :fullscreen .dashboard-grid,
 html:fullscreen .dashboard-grid {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto !important;
-    height: auto !important;
-    overflow: auto !important;
-    gap: 16px !important;
+    grid-template-columns: 4fr 1fr !important;
+    grid-template-rows: 1fr !important;
+    height: calc(100vh - 8px) !important;
+    overflow: hidden !important;
+    gap: 4px !important;
 }
 
 :fullscreen .grid-card,
 html:fullscreen .grid-card {
-    height: auto !important;
+    height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
-    padding: 16px !important;
-    border-radius: 16px !important;
+    padding: 4px !important;
+    border-radius: 10px !important;
 }
 
 :fullscreen .grid-card .card-header,
 html:fullscreen .grid-card .card-header {
-    display: flex !important;
+    display: none !important;
 }
 
 :fullscreen .calendar-inner-grid,
 html:fullscreen .calendar-inner-grid {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
-    height: auto !important;
-    overflow: visible !important;
+    grid-template-columns: 2.2fr 0.8fr !important;
+    gap: 4px !important;
+    height: 100% !important;
+    overflow: hidden !important;
 }
 
 :fullscreen .mini-calendar-container,
@@ -2093,27 +2075,28 @@ html:fullscreen .btn-delete-todo {
 }
 
 /* ==========================================
-   12. Tablet Windowed Stacked Layout (Top & Bottom)
+   12. Tablet Windowed Side-by-Side (768px to 949px)
    ========================================== */
 @media (min-width: 768px) and (max-width: 949px) {
     .dashboard-container {
-        height: auto !important;
-        overflow: visible !important;
-        display: flex !important;
-        flex-direction: column !important;
+        height: 100vh !important;
+        overflow: hidden !important;
+        display: grid !important;
+        grid-template-rows: auto 1fr !important;
         padding: 12px !important;
         gap: 12px !important;
     }
     .dashboard-grid {
-        grid-template-columns: 1fr !important; /* Stacked Top and Bottom! */
-        grid-template-rows: auto !important;
-        height: auto !important;
-        gap: 16px !important;
+        grid-template-columns: 1.15fr 0.85fr !important; /* side-by-side split screen! */
+        grid-template-rows: 1fr !important;
+        height: 100% !important;
+        overflow: hidden !important;
+        gap: 12px !important;
     }
     .calendar-card, .todo-card {
-        height: auto !important;
-        min-height: 400px !important;
+        height: 100% !important;
         max-height: none !important;
+        overflow-y: auto !important;
     }
 }
 
