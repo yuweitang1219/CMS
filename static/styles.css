@@ -357,30 +357,30 @@ input:focus, select:focus, textarea:focus {
 .clock-display {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
 }
 
 #clock-time {
     font-family: 'Outfit', -apple-system, sans-serif;
     font-size: 1.8rem;
-    font-weight: 700;
+    font-weight: 800;
     letter-spacing: 1px;
-    color: #ffffff;
+    color: var(--text-primary);
     -webkit-text-fill-color: initial;
     line-height: 1;
 }
 
 #clock-date {
     font-family: 'Outfit', sans-serif;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-secondary);
     margin-right: 4px;
     letter-spacing: 0.5px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 4px 10px;
-    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    padding: 6px 12px;
+    border-radius: 10px;
     backdrop-filter: blur(10px);
     display: inline-flex;
     align-items: center;
@@ -448,10 +448,10 @@ input:focus, select:focus, textarea:focus {
 .weather-display {
     display: flex;
     align-items: center;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(15, 23, 42, 0.08);
     padding: 6px 14px;
-    border-radius: 12px;
+    border-radius: 10px;
     backdrop-filter: blur(10px);
 }
 
@@ -460,26 +460,29 @@ input:focus, select:focus, textarea:focus {
     align-items: center;
     gap: 10px;
     font-size: 0.9rem;
-    font-weight: 600;
-    color: #ffffff;
+    font-weight: 700;
+    color: var(--text-primary);
 }
 
 .weather-location {
-    color: var(--accent-cyan);
-    font-weight: 700;
-    font-size: 0.85rem;
+    color: #334155; /* Slate dark - clear and easy to read */
+    font-weight: 800;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 #weather-temp {
     font-family: 'Outfit', sans-serif;
     font-weight: 800;
     font-size: 1.1rem;
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 #weather-cond {
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 0.85rem;
+    color: #475569;
+    font-size: 0.88rem;
     display: flex;
     align-items: center;
     gap: 5px;
@@ -1733,6 +1736,24 @@ html:fullscreen .clock-box,
 html:fullscreen .weather-box {
     padding: 4px 12px !important;
     font-size: 0.85rem !important;
+}
+
+:fullscreen #clock-time,
+html:fullscreen #clock-time,
+:fullscreen #clock-date,
+html:fullscreen #clock-date,
+:fullscreen .weather-info,
+html:fullscreen .weather-info,
+:fullscreen #weather-temp,
+html:fullscreen #weather-temp,
+:fullscreen #weather-cond,
+html:fullscreen #weather-cond {
+    color: #ffffff !important;
+}
+
+:fullscreen .weather-location,
+html:fullscreen .weather-location {
+    color: #38bdf8 !important;
 }
 
 :fullscreen #mini-calendar-clock,
