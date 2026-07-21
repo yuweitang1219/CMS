@@ -970,11 +970,25 @@ input:focus, select:focus, textarea:focus {
     color: white;
 }
 
-/* Timeline & Event List */
+/* Timeline & Event List (Split Upper & Lower) */
 .events-timeline {
     display: flex;
     flex-direction: column;
+    height: 100%;
     min-height: 0;
+    gap: 14px;
+    overflow: hidden;
+}
+
+.events-timeline-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 14px;
     overflow: hidden;
 }
 
@@ -982,7 +996,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     flex-shrink: 0;
 }
 
@@ -992,6 +1006,9 @@ input:focus, select:focus, textarea:focus {
     font-weight: 700;
     letter-spacing: 0.5px;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 /* Hide inline fullscreen button by default (only show in fullscreen) */
@@ -1000,12 +1017,13 @@ input:focus, select:focus, textarea:focus {
 }
 
 .events-list {
-    max-height: 380px;
+    flex: 1;
+    max-height: none;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding-right: 5px;
+    gap: 10px;
+    padding-right: 4px;
 }
 
 .event-item {

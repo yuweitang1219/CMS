@@ -296,6 +296,32 @@ def generate_plan(state):
 
     planType = state.get('planType', 'AA01')
     lastProblemList = state.get('lastProblemList', '')
+    
+    # 自動調取指定 Google Drive 資料夾內的該個案前次歷史檔案，進行差異比對
+    delta_analysis_text = ""
+    if name and name != "未提供資料":
+        try:
+            database.update_case_record(
+                name=name,
+                last_visit_date=state.get("visitDate"),
+                address=state.get("address"),
+                plan_type=state.get("planType")
+            )
+        except Exception as ce:
+            print(f"Error updating case record in DB: {ce}")
+
+        try:
+            from core.drive_helper import get_latest_case_plan_from_drive, analyze_case_delta_with_ai
+            prev_plan_text = get_latest_case_plan_from_drive(name)
+            if prev_plan_text:
+                delta_info = analyze_case_delta_with_ai(prev_plan_text, state)
+                if not lastProblemList and delta_info.get("last_problems"):
+                    lastProblemList = delta_info["last_problems"]
+                if delta_info.get("delta_analysis"):
+                    delta_analysis_text = f"\n\n====================\n🔍 【前後次紀錄 AI 差異比對與問題點分析】\n{delta_info['delta_analysis']}\n===================="
+        except Exception as de_err:
+            print(f"Error fetching/analyzing case history from Drive: {de_err}")
+
     planTypeMap = {
         "AA01": "AA01家訪擬定照顧計畫",
         "ReEval": "單位複評計畫擬定",
@@ -516,7 +542,7 @@ IADLs: {iadlVal}
 
     return {
         "feeStr": feeStr.replace("\\n", "\n"),
-        "planText": planText.replace("\\n", "\n"),
+        "planText": (planText + delta_analysis_text).replace("\\n", "\n"),
         "isError": False
     }
 

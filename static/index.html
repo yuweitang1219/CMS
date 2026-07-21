@@ -28,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=5.3">
+    <link rel="stylesheet" href="/styles.css?v=6.0">
 </head>
 <body>
     
@@ -192,20 +192,37 @@
                         </div>
                     </div>
 
-                    <!-- Upcoming Events List -->
+                    <!-- Split Timeline & Focus Todo Area -->
                     <div class="events-timeline">
-                        <div class="events-timeline-header">
-                            <h3>接下來的行程</h3>
-                            <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
-                                <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
-                            </button>
+                        <!-- Upper Half: Upcoming Events -->
+                        <div class="events-timeline-section events-upper">
+                            <div class="events-timeline-header">
+                                <h3><i class="fa-solid fa-clock-rotate-left"></i> 接下來的行程</h3>
+                                <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
+                                    <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
+                                </button>
+                            </div>
+                            <div id="events-list-empty" class="empty-state hidden">
+                                <i class="fa-solid fa-calendar-minus empty-icon"></i>
+                                <p>目前沒有即將到來的行程</p>
+                            </div>
+                            <div id="events-list" class="events-list">
+                                <!-- Dynamic events -->
+                            </div>
                         </div>
-                        <div id="events-list-empty" class="empty-state hidden">
-                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
-                            <p>此日期沒有安排任何行程</p>
-                        </div>
-                        <div id="events-list" class="events-list">
-                            <!-- Dynamic events -->
+
+                        <!-- Lower Half: Focus To-Dos -->
+                        <div class="events-timeline-section events-lower">
+                            <div class="events-timeline-header">
+                                <h3><i class="fa-solid fa-list-check"></i> 焦點待辦事項</h3>
+                            </div>
+                            <div id="timeline-todo-empty" class="empty-state hidden">
+                                <i class="fa-solid fa-check-double empty-icon"></i>
+                                <p>太棒了！所有待辦已完成</p>
+                            </div>
+                            <div id="timeline-todo-list" class="events-list">
+                                <!-- Dynamic focus todos -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -314,8 +331,11 @@
                         <div class="status-indicator-dot"></div>
                         <div class="status-info">
                             <span class="status-title">Google 帳戶未授權</span>
-                            <span class="status-desc">請點擊下方按鈕以連結您的帳號</span>
+                            <span class="status-desc">請點擊右側按鈕以連結您的帳號</span>
                         </div>
+                        <a href="/auth/google" class="btn btn-primary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;">
+                            <i class="fa-brands fa-google"></i> 點此連結 Google 帳號
+                        </a>
                     </div>
 
                     <form id="google-settings-form" onsubmit="handleSaveGoogleSettings(event)" class="settings-form">
@@ -440,6 +460,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=5.3"></script>
+    <script src="/app.js?v=6.0"></script>
 </body>
 </html>

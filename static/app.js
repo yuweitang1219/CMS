@@ -319,6 +319,50 @@ function renderTodos() {
     // Radius of circle is 18. Circumference is 2 * pi * r = 113.1
     const offset = 113.1 - (113.1 * percentage) / 100;
     document.getElementById("todo-progress-circle").style.strokeDashoffset = offset;
+    
+    // Render Lower Section Focus To-Dos in split timeline
+    renderTimelineFocusTodos();
+}
+
+function renderTimelineFocusTodos() {
+    const timelineTodoList = document.getElementById("timeline-todo-list");
+    const timelineTodoEmpty = document.getElementById("timeline-todo-empty");
+    if (!timelineTodoList || !timelineTodoEmpty) return;
+    
+    timelineTodoList.innerHTML = "";
+    
+    // Get active (uncompleted) todos
+    const activeTodos = (state.todos || []).filter(t => t.completed === 0);
+    if (activeTodos.length === 0) {
+        timelineTodoEmpty.classList.remove("hidden");
+    } else {
+        timelineTodoEmpty.classList.add("hidden");
+        activeTodos.forEach(todo => {
+            const div = document.createElement("div");
+            div.className = "todo-item";
+            
+            let dueHtml = "";
+            if (todo.due_date) {
+                dueHtml = `<span class="todo-due"><i class="fa-regular fa-clock"></i> ${todo.due_date}</span>`;
+            }
+            
+            div.innerHTML = `
+                <div class="todo-item-left" onclick="toggleTodo(${todo.id}, ${todo.completed})">
+                    <div class="custom-checkbox">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div class="todo-item-content">
+                        <span class="todo-item-title">${escapeHTML(todo.title)}</span>
+                        <div class="todo-item-details">
+                            <span class="badge-priority ${todo.priority}">${getPriorityLabel(todo.priority)}</span>
+                            ${dueHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+            timelineTodoList.appendChild(div);
+        });
+    }
 }
 
 async function handleAddTodo(event) {
@@ -460,6 +504,8 @@ async function fetchEvents(showLoading = true) {
                 state.events = newEvents;
                 renderMiniCalendar();
                 renderEvents();
+            } else {
+                renderEvents(); // Re-render to ensure passed time slots disappear dynamically
             }
         }
     } catch (error) {
@@ -714,41 +760,47 @@ function renderEvents() {
         const todoContainer = document.querySelector('.todo-card');
         listEl.innerHTML = "";
 
+        const now = new Date();
+        const isSelectedDateToday = state.selectedDate.toDateString() === now.toDateString();
+
         // Filter events for selected day
         const events = state.events || [];
         const dayEvents = events.filter(event => {
             if (!event || !event.start) return false;
-            const start = event.start.dateTime || event.start.date;
-            if (!start) return false;
-            const eventDate = new Date(start);
-            return eventDate.toDateString() === state.selectedDate.toDateString();
+            const startStr = event.start.dateTime || event.start.date;
+            if (!startStr) return false;
+            const eventStartDate = new Date(startStr);
+            if (eventStartDate.toDateString() !== state.selectedDate.toDateString()) {
+                return false;
+            }
+
+            // If selected date is TODAY, filter out events whose time slot has ALREADY PASSED!
+            if (isSelectedDateToday) {
+                if (event.end && event.end.dateTime) {
+                    const eventEndDate = new Date(event.end.dateTime);
+                    if (now > eventEndDate) {
+                        return false; // Time slot has passed -> hide from "接下來的行程" on dashboard
+                    }
+                } else if (event.start && event.start.dateTime) {
+                    const eventStartDate = new Date(event.start.dateTime);
+                    // Default 1 hour duration if no end time specified
+                    if (now.getTime() > eventStartDate.getTime() + 3600000) {
+                        return false;
+                    }
+                }
+            }
+            return true;
         });
 
-        const isFullscreen = !!document.fullscreenElement;
+        // Keep both timeline and todo containers visible at all times
+        eventsContainer.classList.remove('hidden');
+        todoContainer.classList.remove('hidden');
 
-        if (isFullscreen) {
-            // Fullscreen mode: hide todo-card when calendar events exist, show it when they don't (like original behavior)
-            if (dayEvents.length === 0) {
-                eventsContainer.classList.add('hidden');
-                todoContainer.classList.remove('hidden');
-                emptyEl.classList.add('hidden');
-                renderTodos();
-            } else {
-                eventsContainer.classList.remove('hidden');
-                todoContainer.classList.add('hidden');
-                emptyEl.classList.add('hidden');
-                renderEventsList(dayEvents, listEl);
-            }
+        if (dayEvents.length === 0) {
+            emptyEl.classList.remove('hidden');
         } else {
-            // Normal mode: keep both cards visible, toggle empty state placeholder inside eventsContainer
-            eventsContainer.classList.remove('hidden');
-            todoContainer.classList.remove('hidden');
-            if (dayEvents.length === 0) {
-                emptyEl.classList.remove('hidden');
-            } else {
-                emptyEl.classList.add('hidden');
-                renderEventsList(dayEvents, listEl);
-            }
+            emptyEl.classList.add('hidden');
+            renderEventsList(dayEvents, listEl);
         }
     } catch (error) {
         console.error("Error in renderEvents:", error);

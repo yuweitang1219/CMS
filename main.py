@@ -176,6 +176,76 @@ def retrieve_and_push_fan_case():
     except Exception as e:
         logger.error(f"Error in retrieve_and_push_fan_case: {e}")
 
+def check_and_send_monthly_push_reminder(force=False):
+    """
+    Checks if today is the first working day of the month.
+    If yes (and not sent yet), sends an automatic LINE Push Message with all cases needing a home visit this month.
+    """
+    import datetime
+    local_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+    today = local_now.date()
+    
+    if not force and not database.is_first_working_day_of_month(today):
+        return
+        
+    setting_key = f"monthly_reminder_sent_{today.year}_{today.month:02d}"
+    if not force and database.get_setting(setting_key):
+        return  # Already sent for this month
+        
+    user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
+    token = database.get_setting("line_channel_access_token") or os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+    
+    if not user_id or not token:
+        logger.warning("Missing LINE channel token or authorized user_id for monthly push reminder.")
+        return
+        
+    due_cases = database.get_current_month_due_cases(today.year, today.month)
+    roc_year = today.year - 1911
+    
+    msg_lines = [f"📅 【{roc_year} 年 {today.month} 月首個工作日 - 本月家訪個案自動提醒】", ""]
+    if not due_cases:
+        msg_lines.append("✅ 太棒了！本月目前尚無需家訪複評的個案。")
+    else:
+        msg_lines.append(f"📋 本月需完成家訪個案共 {len(due_cases)} 位：")
+        msg_lines.append("")
+        for idx, c in enumerate(due_cases, 1):
+            v_month = database.format_roc_month(c.get("last_visit_date"))
+            d_month = database.format_roc_month(c.get("due_date"))
+            msg_lines.append(f"{idx}. 個案「{c['name']}」")
+            msg_lines.append(f"   • 上次訪視：{v_month} ➔ 家訪月份：{d_month}")
+            if c.get("address"):
+                msg_lines.append(f"   • 住家地址：{c['address']}")
+            msg_lines.append("")
+        msg_lines.append("💡 請儘速提早安排家訪與約訪行程！祝您工作順手！")
+        
+    push_msg = "\n".join(msg_lines)
+    
+    try:
+        from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, PushMessageRequest, TextMessage
+        config = Configuration(access_token=token)
+        with ApiClient(config) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text=push_msg[:4500])]
+                )
+            )
+        logger.info(f"Successfully sent monthly push reminder for {today.year}-{today.month:02d} to {user_id}")
+        if not force:
+            database.set_setting(setting_key, "1")
+    except Exception as e:
+        logger.error(f"Error sending monthly push reminder: {e}")
+
+def start_monthly_scheduler_loop():
+    import time
+    while True:
+        try:
+            check_and_send_monthly_push_reminder()
+        except Exception as e:
+            logger.error(f"Error in monthly scheduler loop: {e}")
+        time.sleep(3600)
+
 @app.on_event("startup")
 def startup_event():
     t = threading.Thread(target=keep_alive_ping, daemon=True)
@@ -183,6 +253,9 @@ def startup_event():
     
     t_fan = threading.Thread(target=retrieve_and_push_fan_case, daemon=True)
     t_fan.start()
+    
+    t_monthly = threading.Thread(target=start_monthly_scheduler_loop, daemon=True)
+    t_monthly.start()
     
     # 自動連結日曆（如果資料庫設定為空，自動寫入預設金鑰憑證）
     try:
@@ -492,6 +565,49 @@ def test_drive_upload():
             "refresh_token_prefix": ref[:10] if ref else None,
         }
         
+        # Diagnose get_oauth_drive_service step by step
+        oauth_trace = []
+        oauth_service = None
+        try:
+            from datetime import datetime, timezone
+            import requests
+            from google.oauth2.credentials import Credentials
+            from googleapiclient.discovery import build
+            
+            oauth_trace.append(f"client_id len={len(cid) if cid else 0}")
+            oauth_trace.append(f"client_secret len={len(sec) if sec else 0}")
+            oauth_trace.append(f"refresh_token len={len(ref) if ref else 0}")
+            
+            if cid and sec and ref:
+                url = "https://oauth2.googleapis.com/token"
+                payload = {
+                    "client_id": cid,
+                    "client_secret": sec,
+                    "refresh_token": ref,
+                    "grant_type": "refresh_token"
+                }
+                res = requests.post(url, data=payload, timeout=10)
+                oauth_trace.append(f"Refresh HTTP status={res.status_code}")
+                if res.status_code == 200:
+                    res_data = res.json()
+                    tok = res_data.get("access_token")
+                    oauth_trace.append(f"Got access token len={len(tok) if tok else 0}")
+                    creds = Credentials(
+                        token=tok,
+                        refresh_token=ref,
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=cid,
+                        client_secret=sec
+                    )
+                    oauth_service = build('drive', 'v3', credentials=creds)
+                    oauth_trace.append("Built OAuth service successfully")
+                else:
+                    oauth_trace.append(f"Refresh response: {res.text}")
+            else:
+                oauth_trace.append("Missing credentials for OAuth")
+        except Exception as oee:
+            oauth_trace.append(f"OAuth build exception: {str(oee)}")
+
         test_state = {
             "name": "測試個案",
             "visitDate": "2026-07-16",
@@ -501,7 +617,9 @@ def test_drive_upload():
         result = upload_plan_to_drive(test_state, test_text)
         return {
             "upload_result": result,
-            "debug_info": debug_info
+            "debug_info": debug_info,
+            "oauth_trace": oauth_trace,
+            "used_oauth": bool(oauth_service)
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -762,6 +880,28 @@ def save_line_settings(settings: SettingsLine, current_user: str = Depends(get_c
     database.set_setting("line_authorized_user_id", settings.authorized_line_user_id)
     database.set_setting("gemini_api_key", settings.gemini_api_key)
     return {"message": "Line settings saved successfully"}
+
+# --- GOOGLE OAUTH REDIRECT ENDPOINT (PUBLIC) ---
+
+@app.get("/auth/google")
+def redirect_to_google_oauth(request: Request):
+    client_id = database.get_setting("google_client_id") or os.environ.get("GOOGLE_CLIENT_ID")
+    if not client_id:
+        return HTMLResponse("Error: Google Client ID not configured in settings.", status_code=400)
+        
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/oauth2callback"
+    scopes = "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file"
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={client_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"response_type=code&"
+        f"scope={scopes}&"
+        f"access_type=offline&"
+        f"prompt=consent"
+    )
+    return RedirectResponse(url=auth_url)
 
 # --- GOOGLE OAUTH CALLBACK ENDPOINT (PUBLIC) ---
 
@@ -1868,6 +2008,49 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error adding todo from LINE: {e}")
                     reply_msg = f"❌ 新增待辦事項時發生錯誤：{str(e)}"
+        elif any(kw in user_text for kw in ["複評提醒", "到期提醒", "複評到期", "檢查複評", "複評期限"]):
+            due_list = database.get_due_reevaluations()
+            if not due_list:
+                reply_msg = "✅ 太棒了！目前尚無 30 天內即將到期或逾期的長照 2.0 複評個案。"
+            else:
+                msg_lines = ["⏰ 【長照 2.0 複評與家訪提醒清單】", ""]
+                for item in due_list:
+                    v_month = database.format_roc_month(item.get("last_visit_date"))
+                    d_month = database.format_roc_month(item.get("due_date"))
+                    if item["is_overdue"]:
+                        msg_lines.append(f"🚨 逾期警告：個案「{item['name']}」")
+                        msg_lines.append(f"   • 上次訪視：{v_month} ➔ 應訪月份：{d_month} (已逾期)")
+                    else:
+                        msg_lines.append(f"⏳ 倒數提醒：個案「{item['name']}」")
+                        msg_lines.append(f"   • 上次訪視：{v_month} ➔ 應訪月份：{d_month}")
+                    msg_lines.append("")
+                msg_lines.append("💡 請儘速與個案家屬聯繫約訪時間！")
+                reply_msg = "\n".join(msg_lines)
+        elif any(kw in user_text for kw in ["本月家訪", "本月名單", "本月家訪名單", "這個月家訪", "本月複評"]):
+            import datetime
+            local_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+            roc_year = local_now.year - 1911
+            month_cases = database.get_current_month_due_cases(local_now.year, local_now.month)
+            if not month_cases:
+                reply_msg = f"✅ 太棒了！{roc_year} 年 {local_now.month} 月目前尚無需家訪的個案。"
+            else:
+                msg_lines = [f"📅 【{roc_year} 年 {local_now.month} 月份家訪名單】", ""]
+                for idx, c in enumerate(month_cases, 1):
+                    v_month = database.format_roc_month(c.get("last_visit_date"))
+                    d_month = database.format_roc_month(c.get("due_date"))
+                    msg_lines.append(f"{idx}. 個案「{c['name']}」")
+                    msg_lines.append(f"   • 上次訪視：{v_month} ➔ 本月家訪：{d_month}")
+                    if c.get("address"):
+                        msg_lines.append(f"   • 地址：{c['address']}")
+                    msg_lines.append("")
+                msg_lines.append("💡 請儘速提早安排家訪約訪行程！")
+                reply_msg = "\n".join(msg_lines)
+        elif any(user_text.startswith(kw) or user_text.lower().startswith(kw) for kw in ["路線規劃", "家訪路線", "導航規劃", "家訪導航", "規劃路線"]):
+            import re
+            raw_input = re.sub(r"^(路線規劃|家訪路線|導航規劃|家訪導航|規劃路線)[:：\s]*", "", user_text).strip()
+            case_names = [c.strip() for c in re.split(r"[,，\s]+", raw_input) if c.strip()]
+            from core.route_helper import generate_route_plan
+            reply_msg = generate_route_plan(case_names)
         else:
             if not gemini_api_key:
                 reply_msg = "系統錯誤：未設定 GEMINI_API_KEY，請在網頁設定面板中貼上您的金鑰。"
