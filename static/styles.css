@@ -444,6 +444,47 @@ input:focus, select:focus, textarea:focus {
     color: white;
 }
 
+/* Weather Display Widget */
+.weather-display {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 6px 14px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+}
+
+.weather-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.weather-location {
+    color: var(--accent-cyan);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+#weather-temp {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: #ffffff;
+}
+
+#weather-cond {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
 /* Dashboard Grid */
 .dashboard-grid {
     display: grid;
