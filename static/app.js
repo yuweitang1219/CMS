@@ -263,13 +263,8 @@ function renderTodos() {
     const emptyState = document.getElementById("todo-list-empty");
     todoList.innerHTML = "";
     
-    // Filter
-    let filteredTodos = state.todos;
-    if (state.todoFilter === "active") {
-        filteredTodos = state.todos.filter(t => t.completed === 0);
-    } else if (state.todoFilter === "completed") {
-        filteredTodos = state.todos.filter(t => t.completed === 1);
-    }
+    // Render all todos directly without category filter buttons
+    const filteredTodos = state.todos || [];
     
     if (filteredTodos.length === 0) {
         emptyState.classList.remove("hidden");
