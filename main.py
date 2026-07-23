@@ -1902,29 +1902,26 @@ async def line_webhook(request: Request):
                 return
             reply_msg = calendar_flow_res
         elif any(user_text.lower().startswith(prefix) for prefix in [
-            "待辦事項：", "待辦事項:", "待辦事項 ",
-            "新增待辦：", "新增待辦:", "新增待辦 ",
-            "待辦：", "待辦:", "待辦 ",
-            "代辦事項：", "代辦事項:", "代辦事項 ",
-            "新增代辦：", "新增代辦:", "新增代辦 ",
-            "代辦：", "代辦:", "代辦 ",
-            "todo:", "todo：", "todo "
+            "待辦事項", "新增待辦", "待辦",
+            "代辦事項", "新增代辦", "代辦",
+            "todo"
         ]):
             import re
             
             # Find the matching prefix to extract content
             todo_title = ""
             for prefix in [
-                "待辦事項：", "待辦事項:", "待辦事項 ",
-                "新增待辦：", "新增待辦:", "新增待辦 ",
-                "待辦：", "待辦:", "待辦 ",
-                "代辦事項：", "代辦事項:", "代辦事項 ",
-                "新增代辦：", "新增代辦:", "新增代辦 ",
-                "代辦：", "代辦:", "代辦 ",
+                "待辦事項：", "待辦事項:", "待辦事項 ", "待辦事項",
+                "新增待辦：", "新增待辦:", "新增待辦 ", "新增待辦",
+                "待辦：", "待辦:", "待辦 ", "待辦",
+                "代辦事項：", "代辦事項:", "代辦事項 ", "代辦事項",
+                "新增代辦：", "新增代辦:", "新增代辦 ", "新增代辦",
+                "代辦：", "代辦:", "代辦 ", "代辦",
                 "todo:", "todo：", "todo "
             ]:
                 if user_text.lower().startswith(prefix):
                     todo_title = user_text[len(prefix):].strip()
+                    todo_title = todo_title.lstrip(" :：")
                     break
             
             if not todo_title:
