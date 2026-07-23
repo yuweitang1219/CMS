@@ -16,8 +16,8 @@ source .venv/bin/activate
 
 # 3. 安裝/更新依賴套件
 echo "正在安裝/更新 Python 依賴套件..."
-pip install -U pip
-pip install -r requirements.txt
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r requirements.txt
 
 # 4. 偵測本機區域網路 IP
 echo "正在偵測本機區域網路 IP..."
@@ -68,4 +68,4 @@ if [ ! -z "$PORT_PID" ]; then
 fi
 
 echo "正在啟動 Web 伺服器..."
-uvicorn main:app --host 0.0.0.0 --port 8000
+.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
