@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人智能生活儀表板 - 行事曆 & 代辦事項</title>
+    <title>個人智能生活儀表板 - 行事曆 & 待辦事項</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -182,12 +182,12 @@
 
                 <div class="split-section-divider"></div>
 
-                <!-- Lower Half: 代辦事項 -->
+                <!-- Lower Half: 待辦事項 -->
                 <div class="split-card-section lower-section">
                     <div class="card-header">
                         <div class="header-title">
                             <i class="fa-solid fa-list-check icon-accent-todo"></i>
-                            <h2>代辦事項</h2>
+                            <h2>待辦事項</h2>
                         </div>
                         <div class="todo-progress-container">
                             <div class="progress-ring-box">
@@ -210,7 +210,7 @@
                 <!-- Add Todo Form -->
                 <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
                     <div class="todo-input-row">
-                        <input type="text" id="todo-input-title" placeholder="新增一個代辦事項..." required autocomplete="off">
+                        <input type="text" id="todo-input-title" placeholder="新增一個待辦事項..." required autocomplete="off">
                         
                         <div class="todo-input-meta">
                             <select id="todo-input-priority" class="priority-select">
@@ -231,7 +231,7 @@
                 <div class="todo-list-container">
                     <div id="todo-list-empty" class="empty-state hidden">
                         <i class="fa-solid fa-clipboard-check empty-icon"></i>
-                        <p>太棒了！目前沒有代辦事項</p>
+                        <p>太棒了！目前沒有待辦事項</p>
                     </div>
                     <ul id="todo-list" class="todo-list">
                         <!-- Dynamic items -->

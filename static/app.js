@@ -366,7 +366,7 @@ async function toggleTodo(id, currentCompleted) {
 }
 
 async function deleteTodo(id) {
-    if (!confirm("確定要刪除此代辦事項嗎？")) return;
+    if (!confirm("確定要刪除此待辦事項嗎？")) return;
     try {
         const response = await fetch(`/api/todos/${id}`, { method: "DELETE" });
         if (response.ok) {

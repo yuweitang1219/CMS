@@ -1925,7 +1925,7 @@ async def line_webhook(request: Request):
                     break
             
             if not todo_title:
-                reply_msg = "⚠️ 請提供代辦事項的內容！\n例如：\n• 代辦：下午兩點與陳照專開會\n• todo: 買感冒藥"
+                reply_msg = "⚠️ 請提供待辦事項的內容！\n例如：\n• 待辦：下午兩點與陳照專開會\n• todo: 買感冒藥"
             else:
                 try:
                     priority = 'medium'
@@ -1998,13 +1998,13 @@ async def line_webhook(request: Request):
                     priority_zh = {"high": "高", "medium": "中", "low": "低"}.get(priority, "中")
                     date_info = f"\n• 截止日期：{due_date}" if due_date else ""
                     reply_msg = (
-                        f"✅ 已成功新增代辦事項：\n"
+                        f"✅ 已成功新增待辦事項：\n"
                         f"• 內容：「{todo_title}」\n"
                         f"• 優先度：{priority_zh}{date_info}"
                     )
                 except Exception as e:
                     logger.error(f"Error adding todo from LINE: {e}")
-                    reply_msg = f"❌ 新增代辦事項時發生錯誤：{str(e)}"
+                    reply_msg = f"❌ 新增待辦事項時發生錯誤：{str(e)}"
         elif any(kw in user_text for kw in ["複評提醒", "到期提醒", "複評到期", "檢查複評", "複評期限"]):
             due_list = database.get_due_reevaluations()
             if not due_list:
