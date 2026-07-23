@@ -480,4 +480,155 @@ def restore_todos_from_drive():
         print(f"Error in restore_todos_from_drive: {e}")
         return False
 
+def backup_cases_to_drive():
+    """
+    Backs up all cases from the local SQLite database to Google Drive as cases.json.
+    """
+    import database
+    from core.calendar_helper import get_oauth_drive_service
+    import io
+    from googleapiclient.http import MediaIoBaseUpload
+    
+    folder_id = database.get_setting("google_drive_folder_id") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id:
+        print("Google Drive Folder ID not configured for case backup.")
+        return False
+        
+    service = get_oauth_drive_service()
+    if not service:
+        # Fall back to service account if configured
+        service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or database.get_setting("google_service_account_json")
+        if service_account_json_str:
+            try:
+                from google.oauth2 import service_account
+                info = json.loads(service_account_json_str)
+                creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"])
+                service = build("drive", "v3", credentials=creds)
+            except Exception as e:
+                print(f"Failed to load service account: {e}")
+                
+    if not service:
+        print("No drive service available for case backup.")
+        return False
+        
+    try:
+        # Fetch ALL cases from local SQLite
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        rows = cursor.execute("SELECT * FROM cases").fetchall()
+        conn.close()
+        cases_data = [dict(row) for row in rows]
+        
+        # Serialize to JSON bytes
+        json_bytes = json.dumps(cases_data, ensure_ascii=False, indent=2).encode('utf-8')
+        fh = io.BytesIO(json_bytes)
+        media = MediaIoBaseUpload(fh, mimetype='application/json', resumable=True)
+        
+        # Check if cases.json already exists in the folder
+        query = f"name = 'cases.json' and '{folder_id}' in parents and trashed = false"
+        response = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        files = response.get('files', [])
+        
+        if files:
+            # Update existing file
+            file_id = files[0]['id']
+            service.files().update(fileId=file_id, media_body=media).execute()
+            print(f"Successfully updated cases.json in Google Drive (file_id={file_id})")
+        else:
+            # Create new file
+            file_metadata = {
+                'name': 'cases.json',
+                'parents': [folder_id]
+            }
+            file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+            print(f"Successfully created cases.json in Google Drive (file_id={file['id']})")
+            
+        return True
+    except Exception as e:
+        print(f"Error in backup_cases_to_drive: {e}")
+        return False
+
+def restore_cases_from_drive():
+    """
+    Downloads cases.json from Google Drive and restores/merges them into the local SQLite database.
+    """
+    import database
+    from core.calendar_helper import get_oauth_drive_service
+    import io
+    from googleapiclient.http import MediaIoBaseDownload
+    
+    folder_id = database.get_setting("google_drive_folder_id") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id:
+        print("Google Drive Folder ID not configured for case restore.")
+        return False
+        
+    service = get_oauth_drive_service()
+    if not service:
+        # Fall back to service account if configured
+        service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or database.get_setting("google_service_account_json")
+        if service_account_json_str:
+            try:
+                from google.oauth2 import service_account
+                info = json.loads(service_account_json_str)
+                creds = service_account.Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive"])
+                service = build("drive", "v3", credentials=creds)
+            except Exception as e:
+                print(f"Failed to load service account: {e}")
+                
+    if not service:
+        print("No drive service available for case restore.")
+        return False
+        
+    try:
+        # Check if cases.json exists in the folder
+        query = f"name = 'cases.json' and '{folder_id}' in parents and trashed = false"
+        response = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        files = response.get('files', [])
+        
+        if not files:
+            print("No cases.json found in Google Drive to restore.")
+            return False
+            
+        file_id = files[0]['id']
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            
+        # Parse JSON
+        fh.seek(0)
+        cases_data = json.loads(fh.read().decode('utf-8'))
+        
+        if not isinstance(cases_data, list):
+            print("Invalid format in cases.json downloaded from Drive.")
+            return False
+            
+        # Restore into local SQLite
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        
+        # Merge logic to prevent duplicates
+        local_rows = cursor.execute("SELECT * FROM cases").fetchall()
+        local_todos = [dict(row) for row in local_rows]
+        local_names = {c['name'] for c in local_todos}
+        
+        inserted_count = 0
+        for c in cases_data:
+            if c.get('name') not in local_names:
+                cursor.execute(
+                    "INSERT INTO cases (name, address, last_visit_date, plan_type, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    (c['name'], c.get('address'), c.get('last_visit_date'), c.get('plan_type', 'AA01'), c.get('updated_at'))
+                )
+                inserted_count += 1
+                
+        conn.commit()
+        conn.close()
+        print(f"Successfully restored/merged {inserted_count} cases from Google Drive cases.json.")
+        return True
+    except Exception as e:
+        print(f"Error in restore_cases_from_drive: {e}")
+        return False
+
 

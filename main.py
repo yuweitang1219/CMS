@@ -276,14 +276,15 @@ def startup_event():
     except Exception as se_err:
         logger.error(f"Failed to auto-populate credentials: {se_err}")
         
-    def restore_todos_async():
+    def restore_data_async():
         try:
-            from core.drive_helper import restore_todos_from_drive
+            from core.drive_helper import restore_todos_from_drive, restore_cases_from_drive
             restore_todos_from_drive()
+            restore_cases_from_drive()
         except Exception as r_err:
-            logger.error(f"Error restoring todos from Drive: {r_err}")
+            logger.error(f"Error restoring data from Drive: {r_err}")
             
-    threading.Thread(target=restore_todos_async, daemon=True).start()
+    threading.Thread(target=restore_data_async, daemon=True).start()
 
 # Auto-populate admin user from environment variables if not present in DB
 admin_user = os.environ.get("ADMIN_USERNAME", "yuwei1112")

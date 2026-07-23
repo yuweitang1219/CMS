@@ -307,6 +307,9 @@ def generate_plan(state):
                 address=state.get("address"),
                 plan_type=state.get("planType")
             )
+            import threading
+            from core.drive_helper import backup_cases_to_drive
+            threading.Thread(target=backup_cases_to_drive, daemon=True).start()
         except Exception as ce:
             print(f"Error updating case record in DB: {ce}")
 

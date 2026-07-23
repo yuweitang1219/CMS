@@ -28,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=19.0">
+    <link rel="stylesheet" href="/styles.css?v=20.0">
 </head>
 <body>
     
@@ -283,6 +283,11 @@
                         </div>
                     </div>
 
+                    <div class="google-auth-warning-alert">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span><strong>重要提示：</strong> 授權時請務必<strong>手動勾選並允許「查看、編輯、建立和刪除 Google 雲端硬碟檔案」</strong>的權限核取方塊，否則系統將無法上傳照顧計畫書及備份待辦事項！</span>
+                    </div>
+
                     <form id="google-settings-form" onsubmit="handleSaveGoogleSettings(event)" class="settings-form">
                         <!-- Hidden inputs for client credentials since they are in environment variables -->
                         <div style="display: none;">
@@ -405,6 +410,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=19.0"></script>
+    <script src="/app.js?v=20.0"></script>
 </body>
 </html>
