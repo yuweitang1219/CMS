@@ -1453,7 +1453,6 @@ async def line_webhook(request: Request):
                     try:
                         visit_date = target_state.get("visitDate")
                         visit_time = target_state.get("visitTime", "09:00")
-                        from datetime import datetime
                         current_dt = datetime.fromisoformat(f"{visit_date}T{visit_time}:00")
                         
                         time_min = f"{visit_date}T00:00:00Z"
@@ -2024,8 +2023,7 @@ async def line_webhook(request: Request):
                 msg_lines.append("💡 請儘速與個案家屬聯繫約訪時間！")
                 reply_msg = "\n".join(msg_lines)
         elif any(kw in user_text for kw in ["本月家訪", "本月名單", "本月家訪名單", "這個月家訪", "本月複評"]):
-            import datetime
-            local_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
+            local_now = datetime.utcnow() + timedelta(hours=8)
             roc_year = local_now.year - 1911
             month_cases = database.get_current_month_due_cases(local_now.year, local_now.month)
             if not month_cases:
@@ -2122,9 +2120,8 @@ async def line_webhook(request: Request):
         reply_text = ""
         if service:
             try:
-                import datetime
-                today_str = datetime.date.today().isoformat()
-                time_min = datetime.datetime.utcnow().isoformat() + "Z"
+                today_str = datetime.today().date().isoformat()
+                time_min = datetime.utcnow().isoformat() + "Z"
                 time_max = f"{today_str}T23:59:59Z"
                 
                 events_result = service.events().list(
