@@ -529,7 +529,6 @@ class JsErrorPayload(BaseModel):
 @app.post("/api/debug/js-error")
 def report_js_error(payload: JsErrorPayload):
     global js_errors
-    from datetime import datetime
     js_errors.append({
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "error": payload.dict()
@@ -569,7 +568,7 @@ def test_drive_upload():
         oauth_trace = []
         oauth_service = None
         try:
-            from datetime import datetime, timezone
+            from datetime import timezone
             import requests
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
@@ -1280,8 +1279,7 @@ def format_state_summary(state):
     age = "未提供"
     if state.get("birthYear") and state.get("birthYear") != "1940" and state.get("birthYear").isdigit():
         try:
-            import datetime
-            current_year = datetime.datetime.now().year
+            current_year = datetime.now().year
             age = f"{current_year - int(state['birthYear'])}歲 ({state['birthYear']}年次)"
         except:
             pass
@@ -1372,8 +1370,7 @@ def download_care_plan(user_id: str):
         except Exception:
             roc_str = visit_date
     else:
-        import datetime
-        today = datetime.date.today()
+        today = datetime.now().date()
         roc_year = today.year - 1911
         roc_str = f"{roc_year}{today.month:02d}{today.day:02d}"
         
@@ -2004,6 +2001,43 @@ async def line_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Error adding todo from LINE: {e}")
                     reply_msg = f"❌ 新增待辦事項時發生錯誤：{str(e)}"
+        elif any(user_text.lower().startswith(kw) for kw in ["完成待辦", "完成代辦"]):
+            kw = ""
+            for prefix in ["完成待辦", "完成代辦"]:
+                if user_text.lower().startswith(prefix):
+                    kw = user_text[len(prefix):].strip().lstrip(" :：")
+                    break
+            if not kw:
+                reply_msg = "⚠️ 請提供要標記完成的待辦事項名稱或關鍵字！\n例如：\n• 完成待辦 買牛奶\n• 完成代辦 下午開會"
+            else:
+                todos = database.get_todos()
+                uncompleted_todos = [t for t in todos if not t.get("completed")]
+                matched = [t for t in uncompleted_todos if kw.lower() in t.get("title", "").lower()]
+                
+                if not matched:
+                    reply_msg = f"🔍 找不到含有「{kw}」的未完成待辦事項。"
+                else:
+                    target = matched[0]
+                    database.update_todo(target["id"], completed=1)
+                    reply_msg = f"✅ 已成功將待辦事項「{target['title']}」標記為完成！"
+        elif any(user_text.lower().startswith(kw) for kw in ["刪除待辦", "刪除代辦", "取消待辦", "取消代辦"]):
+            kw = ""
+            for prefix in ["刪除待辦", "刪除代辦", "取消待辦", "取消代辦"]:
+                if user_text.lower().startswith(prefix):
+                    kw = user_text[len(prefix):].strip().lstrip(" :：")
+                    break
+            if not kw:
+                reply_msg = "⚠️ 請提供要刪除的待辦事項名稱或關鍵字！\n例如：\n• 刪除待辦 買牛奶\n• 取消待辦 下午開會"
+            else:
+                todos = database.get_todos()
+                matched = [t for t in todos if kw.lower() in t.get("title", "").lower()]
+                
+                if not matched:
+                    reply_msg = f"🔍 找不到含有「{kw}」的待辦事項。"
+                else:
+                    target = matched[0]
+                    database.delete_todo(target["id"])
+                    reply_msg = f"🗑️ 已成功刪除待辦事項：「{target['title']}」！"
         elif any(kw in user_text for kw in ["複評提醒", "到期提醒", "複評到期", "檢查複評", "複評期限"]):
             due_list = database.get_due_reevaluations()
             if not due_list:
