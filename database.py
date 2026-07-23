@@ -34,9 +34,14 @@ def init_db():
             priority TEXT NOT NULL DEFAULT 'medium', -- low, medium, high
             due_date TEXT,
             completed INTEGER DEFAULT 0, -- 0 for False, 1 for True
+            completed_at TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    try:
+        cursor.execute("ALTER TABLE todos ADD COLUMN completed_at TEXT")
+    except sqlite3.OperationalError:
+        pass
     
     # Create settings table
     cursor.execute("""
@@ -94,7 +99,12 @@ def has_users():
 def get_todos():
     conn = get_db_connection()
     cursor = conn.cursor()
-    rows = cursor.execute("SELECT * FROM todos ORDER BY completed ASC, created_at DESC").fetchall()
+    rows = cursor.execute("""
+        SELECT * FROM todos 
+        WHERE completed = 0 
+           OR (completed = 1 AND completed_at >= datetime('now', '-1 day'))
+        ORDER BY completed ASC, created_at DESC
+    """).fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -129,6 +139,10 @@ def update_todo(todo_id, title=None, priority=None, due_date=None, completed=Non
     if completed is not None:
         updates.append("completed = ?")
         params.append(int(completed))
+        if int(completed) == 1:
+            updates.append("completed_at = datetime('now')")
+        else:
+            updates.append("completed_at = NULL")
         
     if not updates:
         conn.close()
