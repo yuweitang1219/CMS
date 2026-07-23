@@ -275,6 +275,15 @@ def startup_event():
             logger.info("Automatically populated Google Calendar and LINE credentials in database on startup.")
     except Exception as se_err:
         logger.error(f"Failed to auto-populate credentials: {se_err}")
+        
+    def restore_todos_async():
+        try:
+            from core.drive_helper import restore_todos_from_drive
+            restore_todos_from_drive()
+        except Exception as r_err:
+            logger.error(f"Error restoring todos from Drive: {r_err}")
+            
+    threading.Thread(target=restore_todos_async, daemon=True).start()
 
 # Auto-populate admin user from environment variables if not present in DB
 admin_user = os.environ.get("ADMIN_USERNAME", "yuwei1112")
@@ -703,12 +712,14 @@ def list_todos(current_user: str = Depends(get_current_user)):
     return database.get_todos()
 
 @app.post("/api/todos")
-def create_todo(todo: TodoCreate, current_user: str = Depends(get_current_user)):
+def create_todo(todo: TodoCreate, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     todo_id = database.add_todo(todo.title, todo.priority, todo.due_date)
+    from core.drive_helper import backup_todos_to_drive
+    background_tasks.add_task(backup_todos_to_drive)
     return {"id": todo_id, "message": "Todo created successfully"}
 
 @app.put("/api/todos/{todo_id}")
-def update_todo(todo_id: int, todo: TodoUpdate, current_user: str = Depends(get_current_user)):
+def update_todo(todo_id: int, todo: TodoUpdate, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     success = database.update_todo(
         todo_id,
         title=todo.title,
@@ -718,13 +729,17 @@ def update_todo(todo_id: int, todo: TodoUpdate, current_user: str = Depends(get_
     )
     if not success:
         raise HTTPException(status_code=404, detail="Todo not found")
+    from core.drive_helper import backup_todos_to_drive
+    background_tasks.add_task(backup_todos_to_drive)
     return {"message": "Todo updated successfully"}
 
 @app.delete("/api/todos/{todo_id}")
-def delete_todo(todo_id: int, current_user: str = Depends(get_current_user)):
+def delete_todo(todo_id: int, background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
     success = database.delete_todo(todo_id)
     if not success:
         raise HTTPException(status_code=404, detail="Todo not found")
+    from core.drive_helper import backup_todos_to_drive
+    background_tasks.add_task(backup_todos_to_drive)
     return {"message": "Todo deleted successfully"}
 
 # --- SETTINGS API ENDPOINTS (PROTECTED) ---
@@ -1990,6 +2005,8 @@ async def line_webhook(request: Request):
                     
                     # Add to sqlite database
                     todo_id = database.add_todo(todo_title, priority, due_date)
+                    from core.drive_helper import backup_todos_to_drive
+                    threading.Thread(target=backup_todos_to_drive, daemon=True).start()
                     
                     priority_zh = {"high": "高", "medium": "中", "low": "低"}.get(priority, "中")
                     date_info = f"\n• 截止日期：{due_date}" if due_date else ""
@@ -2019,6 +2036,8 @@ async def line_webhook(request: Request):
                 else:
                     target = matched[0]
                     database.update_todo(target["id"], completed=1)
+                    from core.drive_helper import backup_todos_to_drive
+                    threading.Thread(target=backup_todos_to_drive, daemon=True).start()
                     reply_msg = f"✅ 已成功將待辦事項「{target['title']}」標記為完成！"
         elif any(user_text.lower().startswith(kw) for kw in ["刪除待辦", "刪除代辦", "取消待辦", "取消代辦"]):
             kw = ""
@@ -2043,6 +2062,8 @@ async def line_webhook(request: Request):
                     if not new_title.endswith(" (已取消)"):
                         new_title = f"{new_title} (已取消)"
                     database.update_todo(target["id"], title=new_title, completed=1)
+                    from core.drive_helper import backup_todos_to_drive
+                    threading.Thread(target=backup_todos_to_drive, daemon=True).start()
                     reply_msg = f"🗑️ 已成功取消待辦事項，並保留歷史紀錄：\n• 「{new_title}」"
         elif any(kw in user_text for kw in ["複評提醒", "到期提醒", "複評到期", "檢查複評", "複評期限"]):
             due_list = database.get_due_reevaluations()
