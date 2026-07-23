@@ -1905,7 +1905,7 @@ async def line_webhook(request: Request):
             "待辦事項", "新增待辦", "待辦",
             "代辦事項", "新增代辦", "代辦",
             "todo"
-        ]):
+        ]) and not any(kw in user_text for kw in ["代購", "代買"]):
             import re
             
             # Find the matching prefix to extract content
