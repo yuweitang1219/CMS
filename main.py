@@ -2027,17 +2027,23 @@ async def line_webhook(request: Request):
                     kw = user_text[len(prefix):].strip().lstrip(" :：")
                     break
             if not kw:
-                reply_msg = "⚠️ 請提供要刪除的待辦事項名稱或關鍵字！\n例如：\n• 刪除待辦 買牛奶\n• 取消待辦 下午開會"
+                reply_msg = "⚠️ 請提供要取消的待辦事項名稱或關鍵字！\n例如：\n• 取消待辦 買牛奶\n• 刪除待辦 下午開會"
             else:
                 todos = database.get_todos()
-                matched = [t for t in todos if kw.lower() in t.get("title", "").lower()]
+                uncompleted_todos = [t for t in todos if not t.get("completed")]
+                matched = [t for t in uncompleted_todos if kw.lower() in t.get("title", "").lower()]
+                if not matched:
+                    matched = [t for t in todos if kw.lower() in t.get("title", "").lower()]
                 
                 if not matched:
                     reply_msg = f"🔍 找不到含有「{kw}」的待辦事項。"
                 else:
                     target = matched[0]
-                    database.delete_todo(target["id"])
-                    reply_msg = f"🗑️ 已成功刪除待辦事項：「{target['title']}」！"
+                    new_title = target["title"]
+                    if not new_title.endswith(" (已取消)"):
+                        new_title = f"{new_title} (已取消)"
+                    database.update_todo(target["id"], title=new_title, completed=1)
+                    reply_msg = f"🗑️ 已成功取消待辦事項，並保留歷史紀錄：\n• 「{new_title}」"
         elif any(kw in user_text for kw in ["複評提醒", "到期提醒", "複評到期", "檢查複評", "複評期限"]):
             due_list = database.get_due_reevaluations()
             if not due_list:
