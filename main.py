@@ -260,18 +260,18 @@ def startup_event():
     # 自動連結日曆（如果資料庫設定為空，自動寫入預設金鑰憑證）
     try:
         if not database.get_setting("google_client_id"):
-            database.set_setting("google_client_id", "162813315978-mjm1ea744p7js7dvu2dbsh7hlo9o38ok.apps.googleusercontent.com")
-            database.set_setting("google_client_secret", "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xp")
-            database.set_setting("google_calendar_id", "ec05c45be955200f25ca9d719205c4f0c583a86e2c4dd5bb65489d757ba6b332@group.calendar.google.com")
-            database.set_setting("google_refresh_token", "1//0eo5Sn9KaXBYGCgYIARAAGA4SNwF-L9IrQIDaw2UwrPIZq8HCUqdtK7orG0So0uOSNRCSh1P15FndN4LNexO9aBmnYYOSauNdij4N")
-            database.set_setting("google_starting_address", "中壢聯新診所")
-            database.set_setting("google_drive_folder_id", "1if4r0fZAHAVityz34w1v0XCakLtcV4Cn")
-            database.set_setting("google_user_email", "yuwei1112@gmail.com")
-            database.set_setting("google_token_expiry", "1782958504")
+            database.set_setting("google_client_id", os.environ.get("GOOGLE_CLIENT_ID", "162813315978-mjm1ea744p7js7dvu2dbsh7hlo9o38ok.apps.googleusercontent.com"))
+            database.set_setting("google_client_secret", os.environ.get("GOOGLE_CLIENT_SECRET", "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xp"))
+            database.set_setting("google_calendar_id", os.environ.get("GOOGLE_CALENDAR_ID", "ec05c45be955200f25ca9d719205c4f0c583a86e2c4dd5bb65489d757ba6b332@group.calendar.google.com"))
+            database.set_setting("google_refresh_token", os.environ.get("GOOGLE_REFRESH_TOKEN", "1//0eo5Sn9KaXBYGCgYIARAAGA4SNwF-L9IrQIDaw2UwrPIZq8HCUqdtK7orG0So0uOSNRCSh1P15FndN4LNexO9aBmnYYOSauNdij4N"))
+            database.set_setting("google_starting_address", os.environ.get("GOOGLE_STARTING_ADDRESS", "中壢聯新診所"))
+            database.set_setting("google_drive_folder_id", os.environ.get("GOOGLE_DRIVE_FOLDER_ID", "1if4r0fZAHAVityz34w1v0XCakLtcV4Cn"))
+            database.set_setting("google_user_email", os.environ.get("GOOGLE_USER_EMAIL", "yuwei1112@gmail.com"))
+            database.set_setting("google_token_expiry", os.environ.get("GOOGLE_TOKEN_EXPIRY", "1782958504"))
             
             # 同時寫入 LINE 憑證方便運作
-            database.set_setting("line_channel_access_token", "fC+IsIlH1KHI6MdNt6mJlx1hUrwbeVlwUhQPa/NsYN/0tesEQtYAmmJh6miojwGS2m6cVSsXAL543XdfMj8k6yEzS4lqTqU+1nD32depM8UPBfPFy9zKD0cQMziChj/aNW2x6YOn2p8xTclfA6OKawdB04t89/1O/w1cDnyilFU=")
-            database.set_setting("line_channel_secret", "2f265dbfefcf28141f46f2db4f2c889d")
+            database.set_setting("line_channel_access_token", os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "fC+IsIlH1KHI6MdNt6mJlx1hUrwbeVlwUhQPa/NsYN/0tesEQtYAmmJh6miojwGS2m6cVSsXAL543XdfMj8k6yEzS4lqTqU+1nD32depM8UPBfPFy9zKD0cQMziChj/aNW2x6YOn2p8xTclfA6OKawdB04t89/1O/w1cDnyilFU="))
+            database.set_setting("line_channel_secret", os.environ.get("LINE_CHANNEL_SECRET", "2f265dbfefcf28141f46f2db4f2c889d"))
             logger.info("Automatically populated Google Calendar and LINE credentials in database on startup.")
     except Exception as se_err:
         logger.error(f"Failed to auto-populate credentials: {se_err}")
