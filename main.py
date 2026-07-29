@@ -508,6 +508,27 @@ def debug_calendar_events():
             "traceback": traceback.format_exc()
         }
 
+@app.get("/api/debug/inspect-session")
+def inspect_session(name: str):
+    """Retrieve session info from disk or MongoDB by name to check details like googleEventId."""
+    try:
+        from core.chatbot import load_session_by_name
+        state = load_session_by_name(name)
+        if state:
+            return {
+                "found": True,
+                "name": name,
+                "googleEventId": state.get("googleEventId"),
+                "visitDate": state.get("visitDate"),
+                "visitTime": state.get("visitTime"),
+                "address": state.get("address"),
+                "planType": state.get("planType")
+            }
+        else:
+            return {"found": False, "error": "Session not found"}
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
 @app.get("/api/debug/calendar-events-raw")
 def debug_calendar_events_raw():
     service, calendar_id = get_calendar_service_from_env()
