@@ -1446,6 +1446,189 @@ def download_care_plan(user_id: str):
         }
     )
 
+def parse_calendar_modify_intent(user_text, gemini_api_key):
+    import google.generativeai as genai
+    import json
+    from datetime import datetime, timedelta
+    
+    local_now = datetime.utcnow() + timedelta(hours=8)
+    today_str = local_now.strftime("%Y-%m-%d")
+    
+    prompt = f"""
+你是一個智慧型助理。請分析以下使用者輸入的繁體中文，判斷這是否是一個「修改/變更/調整已有 Google 行事曆行程（或日曆日程）」的指令。
+當天日期是：{today_str}
+
+如果是，請將指令中的參數解析出來並回傳 JSON 格式。如果不是，請回傳 {{"is_calendar_modify": false}}。
+
+使用者的輸入："{user_text}"
+
+請嚴格回傳以下 JSON 格式（不要有任何 markdown 包裹，也不要有其他文字）：
+{{
+  "is_calendar_modify": true,       // 判斷是否為修改行事曆指令。若不是，此鍵為 false 即可
+  "target_name": "...",             // 欲修改的行程標題關鍵字/個案姓名（如「李嘉蓉」）
+  "target_date": "YYYY-MM-DD",     // 原行程的日期。如果使用者只說了「7/29」或「今天」，請根據當天日期 {today_str} 計算出 YYYY-MM-DD 格式
+  "new_date": "YYYY-MM-DD",        // 欲修改成的新日期。若未提及變更日期，請預設與 target_date 相同
+  "new_time": "HH:MM"              // 欲修改成的新時間（24小時制，如「15:00」、「09:30」）。若未提及變更時間，請回傳 null
+}}
+"""
+    try:
+        genai.configure(api_key=gemini_api_key)
+        # We try gemini-2.5-flash first
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```"):
+            first_nl = text.find("\n")
+            last_bt = text.rfind("```")
+            if first_nl != -1 and last_bt != -1:
+                text = text[first_nl:last_bt].strip()
+        
+        # Try to extract JSON if there's extra text around it
+        if not text.startswith("{"):
+            import re
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(0)
+                
+        return json.loads(text)
+    except Exception as e:
+        logger.error(f"Error parsing modify intent: {e}")
+        return {"is_calendar_modify": False}
+
+def execute_calendar_modify(intent, user_id):
+    from core.calendar_helper import get_oauth_service, get_calendar_service_from_env
+    import database
+    from datetime import datetime, timedelta
+    
+    target_name = intent.get("target_name")
+    target_date = intent.get("target_date")
+    new_date = intent.get("new_date") or target_date
+    new_time = intent.get("new_time")
+    
+    if not target_name or not target_date:
+        return "⚠️ 解析修改指令失敗，找不到行程對象或原日期。"
+        
+    oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
+    service = get_oauth_service(oauth_calendar_id)
+    if service:
+        calendar_id = oauth_calendar_id
+    else:
+        service, calendar_id = get_calendar_service_from_env()
+        if not service:
+            return "❌ 無法連結您的 Google 行事曆，請檢查設定是否正確。"
+            
+    try:
+        # Search events on target_date
+        time_min = f"{target_date}T00:00:00Z"
+        time_max = f"{target_date}T23:59:59Z"
+        events_result = service.events().list(
+            calendarId=calendar_id,
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        
+        events = events_result.get('items', [])
+        matched_events = [ev for ev in events if target_name.lower() in ev.get("summary", "").lower()]
+        
+        if not matched_events:
+            return f"🔍 找不到 {target_date} 上標題含有「{target_name}」的行事曆行程。"
+            
+        if len(matched_events) > 1:
+            titles = "、".join([f"「{ev.get('summary')}」" for ev in matched_events])
+            return f"⚠️ 找到多筆相符的行程：{titles}，請在 LINE 輸入更明確的標題以便修改。"
+            
+        event = matched_events[0]
+        event_id = event["id"]
+        original_summary = event.get("summary", "")
+        
+        # Calculate new time bounds
+        start_time_iso = None
+        end_time_iso = None
+        
+        # Get original event times
+        orig_start = event.get("start", {}).get("dateTime")
+        orig_end = event.get("end", {}).get("dateTime")
+        
+        if not orig_start:
+            # All day event, skip time calculations
+            return f"⚠️ 行程「{original_summary}」為整天活動，暫不支援變更時間。"
+            
+        try:
+            # Parse duration
+            if orig_start.endswith("Z"):
+                start_dt = datetime.fromisoformat(orig_start[:-1])
+                end_dt = datetime.fromisoformat(orig_end[:-1])
+            else:
+                start_dt = datetime.fromisoformat(orig_start)
+                end_dt = datetime.fromisoformat(orig_end)
+            duration = end_dt - start_dt
+        except Exception:
+            duration = timedelta(hours=1)
+            
+        # Parse new start datetime
+        if new_time:
+            new_start_dt = datetime.fromisoformat(f"{new_date}T{new_time}:00")
+        else:
+            # Keep original time but change date
+            if orig_start.endswith("Z"):
+                orig_time_part = orig_start.split("T")[1][:-1] # e.g. 09:00:00
+            else:
+                orig_time_part = orig_start.split("T")[1].split("+")[0].split("-")[0]
+            new_start_dt = datetime.fromisoformat(f"{new_date}T{orig_time_part}")
+            
+        new_end_dt = new_start_dt + duration
+        
+        # Update body
+        event_body = {
+            'summary': event.get('summary'),
+            'description': event.get('description'),
+            'location': event.get('location'),
+            'start': {
+                'dateTime': new_start_dt.isoformat(),
+                'timeZone': 'Asia/Taipei',
+            },
+            'end': {
+                'dateTime': new_end_dt.isoformat(),
+                'timeZone': 'Asia/Taipei',
+            }
+        }
+        
+        # Patch/update the event
+        updated_event = service.events().patch(
+            calendarId=calendar_id,
+            eventId=event_id,
+            body=event_body
+        ).execute()
+        
+        # Format date for response
+        try:
+            # Display ROC year
+            parts = new_date.split("-")
+            roc_year = int(parts[0]) - 1911
+            display_date = f"民國 {roc_year} 年 {parts[1]} 月 {parts[2]} 日"
+        except Exception:
+            display_date = new_date
+            
+        display_time = new_time if new_time else new_start_dt.strftime("%H:%M")
+        
+        # Also update the active session if the name matches the loaded case name!
+        from core.chatbot import load_session, save_session
+        state = load_session(user_id)
+        if state and state.get("name") == target_name:
+            state["visitDate"] = new_date
+            if new_time:
+                state["visitTime"] = new_time
+            state["googleEventId"] = event_id
+            save_session(user_id, state)
+            
+        return f"📅 成功更新 Google 行事曆行程！\n\n• 行程：「{original_summary}」\n• 新日期：{display_date}\n• 新時間：{display_time}"
+        
+    except Exception as e:
+        logger.error(f"Error executing calendar modify: {e}")
+        return f"❌ 修改行事曆行程時發生錯誤：{str(e)}"
+
 @app.post("/api/line/webhook")
 async def line_webhook(request: Request):
     body = await request.body()
@@ -2157,22 +2340,33 @@ async def line_webhook(request: Request):
             if not gemini_api_key:
                 reply_msg = "系統錯誤：未設定 GEMINI_API_KEY，請在網頁設定面板中貼上您的金鑰。"
             else:
-                # 1. Let Gemini process the message to parse details (e.g. update state with date/time/name)
-                reply_msg = process_chat(user_id, user_text, gemini_api_key)
+                # 0. Check if user is trying to modify an existing calendar event directly
+                is_modify_cmd = any(kw in user_text for kw in ["修改", "變更", "調整", "改時間", "改日期", "改日程", "改行程", "修改行程", "變更行程", "修改日曆", "變更日曆", "修改行事曆", "變更行事曆"])
+                intent = None
+                if is_modify_cmd:
+                    logger.info("Intercepted potential calendar modification text, parsing with Gemini...")
+                    intent = parse_calendar_modify_intent(user_text, gemini_api_key)
                 
-                # 2. Check if the message contains a calendar keyword. If yes, auto-trigger calendar flow!
-                calendar_kws = [
-                    "建立行事曆", "新增行事曆", "增加行事曆", "加入行事曆", "加行事曆", 
-                    "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", 
-                    "建立行程", "新增行程", "加入行程", "排程", "加行程", "增加行程", 
-                    "排入行程", "排行程", "加入日曆", "同步日曆", "建立日曆", "新增日曆", 
-                    "排日曆", "排入日曆", "同步到日曆"
-                ]
-                if any(kw in user_text for kw in calendar_kws):
-                    calendar_flow_res = run_calendar_sync_flow()
-                    if calendar_flow_res == "__HANDLED__":
-                        return
-                    reply_msg = calendar_flow_res
+                if intent and intent.get("is_calendar_modify"):
+                    logger.info(f"Executing calendar modify: {intent}")
+                    reply_msg = execute_calendar_modify(intent, user_id)
+                else:
+                    # 1. Let Gemini process the message to parse details (e.g. update state with date/time/name)
+                    reply_msg = process_chat(user_id, user_text, gemini_api_key)
+                    
+                    # 2. Check if the message contains a calendar keyword. If yes, auto-trigger calendar flow!
+                    calendar_kws = [
+                        "建立行事曆", "新增行事曆", "增加行事曆", "加入行事曆", "加行事曆", 
+                        "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", 
+                        "建立行程", "新增行程", "加入行程", "排程", "加行程", "增加行程", 
+                        "排入行程", "排行程", "加入日曆", "同步日曆", "建立日曆", "新增日曆", 
+                        "排日曆", "排入日曆", "同步到日曆"
+                    ]
+                    if any(kw in user_text for kw in calendar_kws):
+                        calendar_flow_res = run_calendar_sync_flow()
+                        if calendar_flow_res == "__HANDLED__":
+                            return
+                        reply_msg = calendar_flow_res
                 
         # Send reply message chunked if > 5000 chars
         try:
