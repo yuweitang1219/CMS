@@ -529,6 +529,30 @@ def inspect_session(name: str):
     except Exception as e:
         return {"found": False, "error": str(e)}
 
+@app.get("/api/debug/list-all-sessions")
+def list_all_sessions():
+    """List all available session keys in MongoDB and files on disk."""
+    try:
+        from core.chatbot import mongo_col, SESSION_DIR
+        import os
+        
+        mongo_keys = []
+        if mongo_col is not None:
+            for doc in mongo_col.find({}, {"user_id": 1}):
+                mongo_keys.append(doc.get("user_id"))
+                
+        disk_files = []
+        if os.path.exists(SESSION_DIR):
+            disk_files = os.listdir(SESSION_DIR)
+            
+        return {
+            "mongo_keys": mongo_keys,
+            "disk_files": disk_files,
+            "session_dir": SESSION_DIR
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/debug/calendar-events-raw")
 def debug_calendar_events_raw():
     service, calendar_id = get_calendar_service_from_env()
