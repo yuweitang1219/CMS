@@ -494,7 +494,26 @@ JSON 必須包含以下兩個鍵：
                 text = json_match.group(0)
         
         data = json.loads(text)
-        updated_state = data.get("updated_state", state)
+        new_state = data.get("updated_state", {})
+        
+        # Merge new_state with old state to prevent data loss (losing memory during the conversation)
+        updated_state = state.copy()
+        for k, v in new_state.items():
+            # Keep old value if new value is empty/default while old value was populated
+            if v in [None, "", "未提供資料", [], {}] and updated_state.get(k) not in [None, "", "未提供資料", [], {}]:
+                continue
+            
+            # For dictionaries like adlData, iadlData, serviceTimes, merge their keys
+            if isinstance(v, dict) and isinstance(updated_state.get(k), dict):
+                merged_dict = updated_state[k].copy()
+                for sub_k, sub_v in v.items():
+                    if sub_v in [None, "", "未提供資料"] and merged_dict.get(sub_k) not in [None, "", "未提供資料"]:
+                        continue
+                    merged_dict[sub_k] = sub_v
+                updated_state[k] = merged_dict
+            else:
+                updated_state[k] = v
+                
         reply_text = data.get("reply_text", "抱歉，系統處理出現了一些問題。請問您是否可以再描述一次個案的狀況？")
         
         # Track if the date was changed during this session
