@@ -180,8 +180,10 @@ def check_and_send_monthly_push_reminder(force=False):
     """
     Checks if today is the first working day of the month.
     If yes (and not sent yet), sends an automatic LINE Push Message with all cases needing a home visit this month.
+    Uses a Google Calendar event marker to guarantee persistence across server restarts (since Render has no persistent DB).
     """
     import datetime
+    import calendar
     local_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
     today = local_now.date()
     
@@ -189,9 +191,45 @@ def check_and_send_monthly_push_reminder(force=False):
         return
         
     setting_key = f"monthly_reminder_sent_{today.year}_{today.month:02d}"
+    
+    # 1. Quick check SQLite first
     if not force and database.get_setting(setting_key):
         return  # Already sent for this month
         
+    # 2. Check Google Calendar for marker event to handle ephemeral server resets
+    sent_marker = f"📋 [系統紀錄] 已發送 {today.year}-{today.month:02d} 月份家訪提醒"
+    from core.calendar_helper import get_oauth_service, get_calendar_service_from_env
+    oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
+    service = get_oauth_service(oauth_calendar_id)
+    if service:
+        calendar_id = oauth_calendar_id
+    else:
+        service, calendar_id = get_calendar_service_from_env()
+        
+    if not force and service:
+        try:
+            # Query events this month
+            time_min = f"{today.year}-{today.month:02d}-01T00:00:00Z"
+            last_day = calendar.monthrange(today.year, today.month)[1]
+            time_max = f"{today.year}-{today.month:02d}-{last_day:02d}T23:59:59Z"
+            
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                q=sent_marker,
+                singleEvents=True
+            ).execute()
+            
+            events = events_result.get('items', [])
+            if events:
+                logger.info(f"Monthly reminder already sent according to Calendar marker for {today.year}-{today.month:02d}")
+                # Save to local setting so we don't query Calendar API on every loop iteration
+                database.set_setting(setting_key, "1")
+                return
+        except Exception as ce:
+            logger.error(f"Error checking calendar marker: {ce}")
+            
     user_id = database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID")
     token = database.get_setting("line_channel_access_token") or os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
     
@@ -232,8 +270,29 @@ def check_and_send_monthly_push_reminder(force=False):
                 )
             )
         logger.info(f"Successfully sent monthly push reminder for {today.year}-{today.month:02d} to {user_id}")
+        
+        # 3. Save to local SQLite
         if not force:
             database.set_setting(setting_key, "1")
+            
+        # 4. Create Google Calendar marker event for persistence
+        if not force and service:
+            try:
+                marker_event = {
+                    'summary': sent_marker,
+                    'description': '此活動為長照 CarePlan LINE 機器人自動產生的發送紀錄，用以防止重複發送提醒。請勿刪除。',
+                    'start': {
+                        'date': today.isoformat(),
+                    },
+                    'end': {
+                        'date': today.isoformat(),
+                    }
+                }
+                service.events().insert(calendarId=calendar_id, body=marker_event).execute()
+                logger.info(f"Created Calendar marker event: {sent_marker}")
+            except Exception as ce:
+                logger.error(f"Failed to create Calendar marker event: {ce}")
+                
     except Exception as e:
         logger.error(f"Error sending monthly push reminder: {e}")
 
