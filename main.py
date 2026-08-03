@@ -529,6 +529,39 @@ def inspect_session(name: str):
     except Exception as e:
         return {"found": False, "error": str(e)}
 
+@app.get("/api/debug/database-settings")
+def debug_database_settings():
+    """Debug SQLite & MongoDB settings status."""
+    try:
+        import database
+        import os
+        from datetime import datetime, timedelta
+        
+        local_now = datetime.utcnow() + timedelta(hours=8)
+        today = local_now.date()
+        setting_key = f"monthly_reminder_sent_{today.year}_{today.month:02d}"
+        
+        mongo_col_initialized = database._mongo_settings_col is not None
+        has_mongo_uri = bool(os.environ.get("MONGO_URI"))
+        
+        db_val = database.get_setting(setting_key)
+        
+        # Test setting/getting a test key
+        database.set_setting("debug_test_key", "test_val_123")
+        read_test_val = database.get_setting("debug_test_key")
+        
+        return {
+            "setting_key": setting_key,
+            "setting_value": db_val,
+            "has_mongo_uri": has_mongo_uri,
+            "mongo_col_initialized": mongo_col_initialized,
+            "test_key_write_read_success": read_test_val == "test_val_123",
+            "is_first_working_day": database.is_first_working_day_of_month(today),
+            "today": today.isoformat()
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/debug/list-all-sessions")
 def list_all_sessions():
     """List all available session keys in MongoDB and files on disk."""
