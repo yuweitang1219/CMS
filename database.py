@@ -7,6 +7,19 @@ if os.path.exists("/data") and os.path.isdir("/data"):
 else:
     DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.db")
 
+# MongoDB connection for persistent settings in cloud environments
+_mongo_settings_col = None
+try:
+    mongo_uri = os.environ.get("MONGO_URI")
+    if mongo_uri:
+        from pymongo import MongoClient
+        _mongo_client = MongoClient(mongo_uri)
+        _mongo_db = _mongo_client.get_database("line_bot_db")
+        _mongo_settings_col = _mongo_db.get_collection("settings")
+        print("database.py: Successfully connected to MongoDB for persistent settings!")
+except Exception as _me:
+    print("database.py: Failed to initialize MongoDB client:", _me)
+
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -167,6 +180,14 @@ def delete_todo(todo_id):
 
 # --- Settings Functions ---
 def get_setting(key, default=None):
+    if _mongo_settings_col is not None:
+        try:
+            doc = _mongo_settings_col.find_one({"key": key})
+            if doc:
+                return doc.get("value")
+        except Exception as e:
+            print(f"Error getting setting {key} from MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     row = cursor.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
@@ -174,6 +195,16 @@ def get_setting(key, default=None):
     return row["value"] if row else default
 
 def set_setting(key, value):
+    if _mongo_settings_col is not None:
+        try:
+            _mongo_settings_col.update_one(
+                {"key": key},
+                {"$set": {"value": str(value) if value is not None else None}},
+                upsert=True
+            )
+        except Exception as e:
+            print(f"Error setting {key} in MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
