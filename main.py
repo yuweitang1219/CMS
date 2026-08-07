@@ -1557,9 +1557,9 @@ def parse_calendar_modify_intent(user_text, gemini_api_key):
 請嚴格回傳以下 JSON 格式（不要有任何 markdown 包裹，也不要有其他文字）：
 {{
   "is_calendar_modify": true,       // 判斷是否為修改行事曆指令。若不是，此鍵為 false 即可
-  "target_name": "...",             // 欲修改的行程標題關鍵字/個案姓名（如「李嘉蓉」）
-  "target_date": "YYYY-MM-DD",     // 原行程的日期。如果使用者只說了「7/29」或「今天」，請根據當天日期 {today_str} 計算出 YYYY-MM-DD 格式
-  "new_date": "YYYY-MM-DD",        // 欲修改成的新日期。若未提及變更日期，請預設與 target_date 相同
+  "target_name": "...",             // 欲修改的行程標題關鍵字/個案姓名（如「曾陳月子」）
+  "target_date": "YYYY-MM-DD",     // 原行程的日期（指原本行程排在何時）。如果使用者有指明原本的日期（例如「08/13 曾陳月子...」），請轉換為 YYYY-MM-DD 格式。若未提及原行程的日期（例如「曾陳月子 改到 08/13 13:30」），請填 null
+  "new_date": "YYYY-MM-DD",        // 欲修改成的新日期（例如「改到 08/13」或「改到明天」）。若未提及變更後的新日期，請填 null
   "new_time": "HH:MM"              // 欲修改成的新時間（24小時制，如「15:00」、「09:30」）。若未提及變更時間，請回傳 null
 }}
 """
@@ -1587,6 +1587,70 @@ def parse_calendar_modify_intent(user_text, gemini_api_key):
         logger.error(f"Error parsing modify intent: {e}")
         return {"is_calendar_modify": False}
 
+def parse_batch_calendar_intent(user_text, gemini_api_key):
+    import google.generativeai as genai
+    import json
+    from datetime import datetime, timedelta
+    
+    local_now = datetime.utcnow() + timedelta(hours=8)
+    today_str = local_now.strftime("%Y-%m-%d")
+    
+    prompt = f"""
+你是一個智慧型助理。請分析以下使用者輸入的繁體中文，判斷這是否是一個「批次建立/同步多個 Google 行事曆行程（或日曆日程）」的指令，或者是單一私人日程（如值班、開會等）。
+當天日期是：{today_str}
+
+如果是，請將指令中包含的所有日程參數解析出來並回傳 JSON 格式。
+如果不是，請回傳 {{"is_batch_calendar": false}}。
+
+請注意：
+1. 使用者可能會提供多個行程（例如多個值班、多筆會議、或者多個個案的家訪）。
+2. 對於每一個行程，請精確解析出：
+   - title: 行程的標題（例如「值班」、「開會」或個案姓名如「李小美」）。如果標題包含個管師私人行程（如「值班」、「開會」、「請假」），請標記計畫類型為 Private。
+   - date: 日期（格式為 YYYY-MM-DD）。若使用者只說了「8/10」或「今天」，請根據當天日期 {today_str} 計算出 YYYY-MM-DD 格式。
+   - start_time: 開始時間（24小時制，如「08:30」、「13:30」）。若未提及時間，請預設為「09:00」。
+   - end_time: 結束時間（24小時制，如「12:30」、「17:30」）。若未提及結束時間，且此行程包含明確的起迄範圍（如「08:30-12:30」），請解析為「12:30」；若未提及且無起迄，請預設為開始時間加 1 小時。
+   - plan_type: 計畫類型。如果是私人行程或非個案訪視，為 "Private"；如果是個案訪視，請根據詞意判定為 "AA01" (預設)、"ReEval" (複評)、"NewCase" (新案)、"CoVisit" (共訪) 等。
+   - address: 個案家中的住家地址（字串，若有提及則提取，否則為 null）。
+
+使用者輸入："{user_text}"
+
+請嚴格回傳以下 JSON 格式（不要有任何 markdown 包裹，也不要有其他文字）：
+{{
+  "is_batch_calendar": true,
+  "events": [
+    {{
+      "title": "...",
+      "date": "YYYY-MM-DD",
+      "start_time": "HH:MM",
+      "end_time": "HH:MM",
+      "plan_type": "...",
+      "address": "..."
+    }}
+  ]
+}}
+"""
+    try:
+        genai.configure(api_key=gemini_api_key)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```"):
+            first_nl = text.find("\n")
+            last_bt = text.rfind("```")
+            if first_nl != -1 and last_bt != -1:
+                text = text[first_nl:last_bt].strip()
+        
+        if not text.startswith("{"):
+            import re
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if json_match:
+                text = json_match.group(0)
+                
+        return json.loads(text)
+    except Exception as e:
+        logger.error(f"Error parsing batch calendar intent: {e}")
+        return {"is_batch_calendar": False}
+
 def execute_calendar_modify(intent, user_id):
     from core.calendar_helper import get_oauth_service, get_calendar_service_from_env
     import database
@@ -1594,11 +1658,11 @@ def execute_calendar_modify(intent, user_id):
     
     target_name = intent.get("target_name")
     target_date = intent.get("target_date")
-    new_date = intent.get("new_date") or target_date
+    new_date = intent.get("new_date")
     new_time = intent.get("new_time")
     
-    if not target_name or not target_date:
-        return "⚠️ 解析修改指令失敗，找不到行程對象或原日期。"
+    if not target_name:
+        return "⚠️ 解析修改指令失敗，找不到行程對象。"
         
     oauth_calendar_id = database.get_setting("google_calendar_id", "primary")
     service = get_oauth_service(oauth_calendar_id)
@@ -1610,26 +1674,61 @@ def execute_calendar_modify(intent, user_id):
             return "❌ 無法連結您的 Google 行事曆，請檢查設定是否正確。"
             
     try:
-        # Search events on target_date
-        time_min = f"{target_date}T00:00:00Z"
-        time_max = f"{target_date}T23:59:59Z"
-        events_result = service.events().list(
-            calendarId=calendar_id,
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            orderBy='startTime'
-        ).execute()
+        matched_events = []
         
-        events = events_result.get('items', [])
-        matched_events = [ev for ev in events if target_name.lower() in ev.get("summary", "").lower()]
-        
-        if not matched_events:
-            return f"🔍 找不到 {target_date} 上標題含有「{target_name}」的行事曆行程。"
+        # 1. Search on target_date if provided
+        if target_date:
+            time_min = f"{target_date}T00:00:00Z"
+            time_max = f"{target_date}T23:59:59Z"
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            events = events_result.get('items', [])
+            matched_events = [ev for ev in events if target_name.lower() in ev.get("summary", "").lower()]
             
+        # 2. Fallback: Search a wider range if target_date was not provided OR no event matched on target_date
+        if not matched_events:
+            local_now = datetime.utcnow() + timedelta(hours=8)
+            today = local_now.date()
+            start_date = today - timedelta(days=14)
+            end_date = today + timedelta(days=60)
+            time_min = f"{start_date.isoformat()}T00:00:00Z"
+            time_max = f"{end_date.isoformat()}T23:59:59Z"
+            
+            events_result = service.events().list(
+                calendarId=calendar_id,
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            events = events_result.get('items', [])
+            matched_events = [ev for ev in events if target_name.lower() in ev.get("summary", "").lower()]
+            
+        if not matched_events:
+            if target_date:
+                return f"🔍 找不到 {target_date} 上（或前後 14 天到 60 天內）標題含有「{target_name}」的行事曆行程。"
+            else:
+                return f"🔍 找不到近期內（前後 14 天到 60 天內）標題含有「{target_name}」的行事曆行程。"
+                
         if len(matched_events) > 1:
-            titles = "、".join([f"「{ev.get('summary')}」" for ev in matched_events])
-            return f"⚠️ 找到多筆相符的行程：{titles}，請在 LINE 輸入更明確的標題以便修改。"
+            event_strs = []
+            for ev in matched_events:
+                start_dateTime = ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+                if start_dateTime:
+                    dt_part = start_dateTime.split("T")[0]
+                    time_part = ""
+                    if "T" in start_dateTime:
+                        time_part = " " + start_dateTime.split("T")[1][:5]
+                    event_strs.append(f"「{ev.get('summary')}」({dt_part}{time_part})")
+                else:
+                    event_strs.append(f"「{ev.get('summary')}」")
+            titles = "、".join(event_strs)
+            return f"⚠️ 找到多筆相符的行程：{titles}，請提供更明確的標題或日期以便修改。"
             
         event = matched_events[0]
         event_id = event["id"]
@@ -1647,6 +1746,10 @@ def execute_calendar_modify(intent, user_id):
             # All day event, skip time calculations
             return f"⚠️ 行程「{original_summary}」為整天活動，暫不支援變更時間。"
             
+        # Determine actual new date (keep original if not specified)
+        orig_date = orig_start.split("T")[0] if "T" in orig_start else orig_start
+        new_date = new_date or orig_date
+        
         try:
             # Parse duration
             if orig_start.endswith("Z"):
@@ -1955,6 +2058,101 @@ async def line_webhook(request: Request):
             from core.chatbot import save_session as _save
             _save(user_id, state)
             reply_msg = "✅ 已暫停生成計畫書。您可以輸入「更改日期為 10/24」來調整日期，或再次輸入「完成」來產出計畫書。"
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+
+        # Check if there is a pending batch calendar confirmation (是/否)
+        pending_batch_confirm = state.get("pending_batch_confirm")
+        if pending_batch_confirm and user_text in ["是", "好", "確認", "對", "yes", "YES", "加入", "同步", "確定"]:
+            state["pending_batch_confirm"] = None
+            pending_events = state.get("pending_batch_events", [])
+            state["pending_batch_events"] = []
+            
+            from core.chatbot import save_session as _save
+            _save(user_id, state)
+            
+            success_count = 0
+            fail_count = 0
+            results_list = []
+            
+            try:
+                from core.calendar_helper import sync_to_calendar
+                import os
+                
+                for ev in pending_events:
+                    title = ev.get("title")
+                    date_str = ev.get("date")
+                    start_time = ev.get("start_time", "09:00")
+                    end_time = ev.get("end_time")
+                    plan_type = ev.get("plan_type", "Private")
+                    address = ev.get("address")
+                    
+                    case_state = None
+                    if plan_type != "Private":
+                        session_path = os.path.join(os.path.dirname(__file__), "sessions", f"{title}.json")
+                        if os.path.exists(session_path):
+                            try:
+                                with open(session_path, "r", encoding="utf-8") as f:
+                                    case_state = json.load(f)
+                            except Exception as le:
+                                logger.error(f"Error loading session file for {title}: {le}")
+                                
+                    if not case_state:
+                        case_state = {
+                            "name": title,
+                            "visitDate": date_str,
+                            "visitTime": start_time,
+                            "planType": plan_type,
+                            "address": address or ""
+                        }
+                    else:
+                        case_state["visitDate"] = date_str
+                        case_state["visitTime"] = start_time
+                        if address:
+                            case_state["address"] = address
+                        if plan_type:
+                            case_state["planType"] = plan_type
+                            
+                    sync_res = sync_to_calendar(
+                        case_state,
+                        override_end_time=end_time
+                    )
+                    
+                    if sync_res.get("success"):
+                        success_count += 1
+                        results_list.append(f"• {date_str} {start_time}-{end_time or ''} {title} (成功)")
+                    else:
+                        fail_count += 1
+                        results_list.append(f"• {date_str} {start_time} {title} (失敗: {sync_res.get('error')})")
+            except Exception as e:
+                logger.error(f"Error in batch calendar sync: {e}")
+                reply_msg = f"❌ 同步批次行事曆時發生錯誤：{str(e)}"
+            else:
+                reply_msg = f"📅 批次行事曆同步完成！\n• 成功：{success_count} 筆\n• 失敗：{fail_count} 筆\n\n詳細明細：\n" + "\n".join(results_list)
+                
+            with ApiClient(configuration) as api_client:
+                line_bot_api = MessagingApi(api_client)
+                line_bot_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_msg)]
+                    )
+                )
+            return
+            
+        elif pending_batch_confirm and user_text in ["否", "不用", "不要", "取消", "no", "NO", "算了"]:
+            state["pending_batch_confirm"] = None
+            state["pending_batch_events"] = []
+            from core.chatbot import save_session as _save
+            _save(user_id, state)
+            reply_msg = "✅ 已取消，行程不會加入 Google 行事曆。"
             with ApiClient(configuration) as api_client:
                 line_bot_api = MessagingApi(api_client)
                 line_bot_api.reply_message(
@@ -2432,6 +2630,49 @@ async def line_webhook(request: Request):
             if not gemini_api_key:
                 reply_msg = "系統錯誤：未設定 GEMINI_API_KEY，請在網頁設定面板中貼上您的金鑰。"
             else:
+                # Check for batch/direct calendar sync intent first
+                calendar_kws = [
+                    "建立行事曆", "新增行事曆", "增加行事曆", "加入行事曆", "加行事曆", 
+                    "建立日程", "排入行事曆", "同步行事曆", "排行程", "同步到行事曆", 
+                    "建立行程", "新增行程", "加入行程", "排程", "加行程", "增加行程", 
+                    "排入行程", "排行程", "加入日曆", "同步日曆", "建立日曆", "新增日曆", 
+                    "排日曆", "排入日曆", "同步到日曆", "值班"
+                ]
+                is_calendar_cmd = any(kw in user_text for kw in calendar_kws)
+                batch_intent = None
+                if is_calendar_cmd:
+                    logger.info("Intercepted potential batch calendar request, parsing...")
+                    batch_intent = parse_batch_calendar_intent(user_text, gemini_api_key)
+                    
+                if batch_intent and batch_intent.get("is_batch_calendar") and batch_intent.get("events"):
+                    events = batch_intent["events"]
+                    is_explicit_sync = any(kw in user_text for kw in ["建立行事曆", "新增行事曆", "加入行事曆", "同步行事曆", "新增行程", "建立行程"])
+                    if len(events) > 1 or (len(events) == 1 and (events[0].get("plan_type") == "Private" or is_explicit_sync)):
+                        logger.info(f"Routing to batch calendar confirmation flow: {events}")
+                        state["pending_batch_events"] = events
+                        state["pending_batch_confirm"] = True
+                        from core.chatbot import save_session as _save
+                        _save(user_id, state)
+                        
+                        msg_lines = ["📅 偵測到您要同步行程至 Google 行事曆：", ""]
+                        for idx, ev in enumerate(events, 1):
+                            type_name = "私人行程" if ev.get("plan_type") == "Private" else f"個案訪視 ({ev.get('plan_type')})"
+                            time_range = f"{ev.get('start_time')}~{ev.get('end_time')}" if ev.get('end_time') else ev.get('start_time')
+                            msg_lines.append(f"{idx}. {ev.get('date')} {time_range} - {ev.get('title')} ({type_name})")
+                        msg_lines.append("")
+                        msg_lines.append("👉 請回覆「是」確認加入行事曆，或「否」取消。")
+                        reply_msg = "\n".join(msg_lines)
+                        
+                        with ApiClient(configuration) as api_client:
+                            line_bot_api = MessagingApi(api_client)
+                            line_bot_api.reply_message(
+                                ReplyMessageRequest(
+                                    reply_token=event.reply_token,
+                                    messages=[TextMessage(text=reply_msg)]
+                                )
+                            )
+                        return
+
                 # 0. Check if user is trying to modify an existing calendar event directly
                 is_modify_cmd = any(kw in user_text for kw in ["修改", "變更", "調整", "改時間", "改日期", "改日程", "改行程", "修改行程", "變更行程", "修改日曆", "變更日曆", "修改行事曆", "變更行事曆"])
                 intent = None

@@ -44,7 +44,7 @@ def get_default_state():
         "familyPhone": "",              # 主要聯絡人電話
         "visitDate": today,
         "visitTime": "09:00",  # 訪視時間，格式為 HH:MM
-        "statusVal": "1",  # 1=一般, 2=中低收, 3=低收
+        "statusVal": "1",  # 1=第三類(一般), 2=第二類(中低收), 3=第一類(低收)
         "livingStr": "與子女同住",
         "burdenStr": "無明顯負荷",
         "hasF": False,
@@ -250,6 +250,10 @@ def process_chat(user_id, user_message, api_key):
     state = load_session(user_id)
     history = state.pop("_history", [])
     
+    # 限制對話歷史長度（保留最近 16 次對話，約 8 輪問答），防止資料庫負載過重與 API 延遲隨對話增長而膨脹
+    if len(history) > 16:
+        history = history[-16:]
+    
     # Load learned rules
     rules = load_rules(user_id)
     if rules:
@@ -342,14 +346,14 @@ def process_chat(user_id, user_message, api_key):
 4a. 主要聯絡人電話 (familyPhone): 字串，例如 "0918-596-286" 等。請從輸入中提取與該主要聯絡人（如二女兒劉小姐）相關聯的電話。
 5. 家訪日期 (visitDate): 格式為 YYYY-MM-DD
 6. 身分別 (statusVal):
-   - "1": 第三級 (一般戶)
-   - "2": 第二級 (中低收)
-   - "3": 第一級 (低收)
+   - "1": 第三類 (一般戶)
+   - "2": 第二類 (中低收)
+   - "3": 第一類 (低收入戶 / 低收)
 7. 居住型態 (livingStr): 必須為以下之一: {json.dumps(LIVING_OPTIONS := ["獨居", "與配偶同住", "與子女同住", "與其他家屬同住", "老老照顧"])}
 8. 主要照顧者負荷 (burdenStr): 必須為以下之一: {json.dumps(BURDEN_OPTIONS := ["無明顯負荷", "需輪班工作/無替手", "自身有慢性病/年邁", "照顧技巧不足", "經濟困難", "其他"])}
 9. 聘僱外籍看護 (hasF): 布林值 (True 或 False)
 10. CMS 等級 (cmsLvl): "2" 到 "8" 的字串
-11. 交通地區分類 (trafLvl): "1" 到 "4" 的字串
+11. 交通地區分類 (trafLvl): "1" 到 "4" 的字串。若個案地址 (address) 包含「中壢」，交通地區分類一律鎖定為 "2"。
 12. 經濟收入與來源 (selectedIncome): 必須為以下清單的子集（可複選）: {json.dumps(INCOME_LIST)}
 13. 疾病史 (selectedConditions): 必須為以下清單的子集: {json.dumps(CONDITIONS_LIST)}
 14. 感官異常評估 (selectedSensory): 必須為以下清單的子集: {json.dumps(SENSORY_LIST)}
@@ -380,7 +384,7 @@ def process_chat(user_id, user_message, api_key):
 24. 服務項目規劃 (activeServices) 與 數量/月 (serviceTimes):
     - 系統支援服務代碼如: {", ".join([s['code'] for s in LTC_SERVICES[:30]])}... 等。
     - 當使用者提及某種照護需求（如：洗澡、備餐、喘息、就醫交通）時，將對應的服務代碼加入 `activeServices`，並在 `serviceTimes` 設定對應的每月次數（例如：洗澡 BA07 預設 12 次/月，備餐 BA05 預設 20 次/月，除非使用者指定其他次數）。
-    - 聘僱外籍看護 (hasF) 為 True 時，BA 碼服務（除了 BA09, BA09a 到宅沐浴車外）應被自動移除（不予核定），且喘息服務 (G碼) 與短照服務 (SC09) 只能在空窗期使用。
+    - 聘僱外籍看護 (hasF) 為 True 時，居家照顧服務 (BA 碼，除到宅沐浴車 BA09, BA09a 外) 應被自動移除（不予核定），但專業服務 (C 碼)、日間照顧 (BB 碼)、家庭托顧 (BC 碼) 均允許核定配置；且喘息服務 (G 碼) 與短照服務 (SC09) 僅能在看護工空窗期使用。
 25. 性別 (gender): 字串，如 "男"、"女"。
 26. 意識狀態 (consciousness): 字串，如 "清楚"、"不清"、"混亂"、"臥床叫喚無反應"。
 27. 對談互動 (interaction): 字串，例如 "簡單對話"、"正常與人應答"、"雙向對談"、"無法說出完整詞句"、"叫喚無反應"、"簡單對談"。
@@ -397,7 +401,7 @@ def process_chat(user_id, user_message, api_key):
 38. 個案地址 (address): 字串，個案家中的住家地址（如「桃園市中壢區中山路100號」、「桃園市八德區介壽路一段xx號」）。當個管師在對話中提及個案居住地址或地點時，請精確提取並更新此欄位。
 
 【長照 2.0 額度與標準定義表（重要，若個管師詢問額度或諮詢，務必以此為唯一標準回答）】:
-1. B/C 照顧及專業服務額度（每月，一般戶自付額 16%、中低收 5%、低收 0%；聘僱外籍看護或入住機構者，額度折減為 30%）：
+1. B/C 照顧及專業服務額度（每月，一般戶/第三類自付額 16%、中低收/第二類自付額 5%、低收/第一類自付額 0%；聘僱外籍看護或入住機構者，額度折減為 30%）：
    - CMS 第 2 級: 10,020 元
    - CMS 第 3 級: 15,460 元
    - CMS 第 4 級: 18,580 元
@@ -513,6 +517,11 @@ JSON 必須包含以下兩個鍵：
                 updated_state[k] = merged_dict
             else:
                 updated_state[k] = v
+                
+        # Force traffic classification to "2" if address contains "中壢"
+        address = updated_state.get("address", "")
+        if address and ("中壢" in address):
+            updated_state["trafLvl"] = "2"
                 
         reply_text = data.get("reply_text", "抱歉，系統處理出現了一些問題。請問您是否可以再描述一次個案的狀況？")
         

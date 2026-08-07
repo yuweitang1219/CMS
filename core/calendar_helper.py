@@ -280,7 +280,7 @@ def get_travel_time_coords(lat_start, lon_start, end_addr):
     return None
 
 
-def sync_to_calendar(state, override_start_address=None, override_source_name=None):
+def sync_to_calendar(state, override_start_address=None, override_source_name=None, override_end_time=None):
     """
     Syncs the case visit date to Google Calendar.
     Tries Google OAuth first, then falls back to GOOGLE_SERVICE_ACCOUNT_JSON.
@@ -333,15 +333,21 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     try:
         from datetime import datetime, timedelta
         start_dt = datetime.fromisoformat(f"{visit_date}T{visit_time}:00")
-        end_dt = start_dt + timedelta(hours=1)
+        if override_end_time:
+            end_dt = datetime.fromisoformat(f"{visit_date}T{override_end_time}:00")
+        else:
+            end_dt = start_dt + timedelta(hours=1)
         start_str = start_dt.isoformat()
         end_str = end_dt.isoformat()
     except Exception as te:
         print(f"Error parsing date/time for calendar: {te}")
         start_str = f"{visit_date}T{visit_time}:00"
         try:
-            h, m = map(int, visit_time.split(":"))
-            end_str = f"{visit_date}T{h+1:02d}:{m:02d}:00"
+            if override_end_time:
+                end_str = f"{visit_date}T{override_end_time}:00"
+            else:
+                h, m = map(int, visit_time.split(":"))
+                end_str = f"{visit_date}T{h+1:02d}:{m:02d}:00"
         except:
             end_str = f"{visit_date}T10:00:00"
             
