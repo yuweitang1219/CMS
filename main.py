@@ -1805,10 +1805,19 @@ def execute_calendar_modify(intent, user_id):
             
         display_time = new_time if new_time else new_start_dt.strftime("%H:%M")
         
-        # Also update the active session if the name matches the loaded case name!
-        from core.chatbot import load_session, save_session
+        # Also update the active session!
+        from core.chatbot import load_session, save_session, load_session_by_name
         state = load_session(user_id)
-        if state and state.get("name") == target_name:
+        if state:
+            if state.get("name") != target_name:
+                loaded_state = load_session_by_name(target_name)
+                if loaded_state:
+                    # Merge loaded state into current state
+                    for k, v in loaded_state.items():
+                        if k != "_history":
+                            state[k] = v
+                state["name"] = target_name
+                
             state["visitDate"] = new_date
             if new_time:
                 state["visitTime"] = new_time
@@ -2073,6 +2082,26 @@ async def line_webhook(request: Request):
             state["pending_batch_events"] = []
             
             from core.chatbot import save_session as _save
+            
+            # If it is a single event, automatically initialize/set it as the active session state
+            if len(pending_events) == 1:
+                ev = pending_events[0]
+                from core.chatbot import load_session_by_name
+                title = ev.get("title")
+                loaded_state = load_session_by_name(title)
+                if loaded_state:
+                    # Merge loaded state into current state
+                    for k, v in loaded_state.items():
+                        if k != "_history":
+                            state[k] = v
+                
+                state["name"] = title
+                state["visitDate"] = ev.get("date")
+                state["visitTime"] = ev.get("start_time", "09:00")
+                state["planType"] = ev.get("plan_type", "AA01")
+                if ev.get("address"):
+                    state["address"] = ev.get("address")
+            
             _save(user_id, state)
             
             success_count = 0
@@ -2125,9 +2154,14 @@ async def line_webhook(request: Request):
                     if sync_res.get("success"):
                         success_count += 1
                         results_list.append(f"• {date_str} {start_time}-{end_time or ''} {title} (成功)")
+                        if len(pending_events) == 1:
+                            state["googleEventId"] = sync_res.get("event_id")
                     else:
                         fail_count += 1
                         results_list.append(f"• {date_str} {start_time} {title} (失敗: {sync_res.get('error')})")
+                
+                # Save session again to persist googleEventId
+                _save(user_id, state)
             except Exception as e:
                 logger.error(f"Error in batch calendar sync: {e}")
                 reply_msg = f"❌ 同步批次行事曆時發生錯誤：{str(e)}"
