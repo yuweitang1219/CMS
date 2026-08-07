@@ -1564,10 +1564,8 @@ def parse_calendar_modify_intent(user_text, gemini_api_key):
 }}
 """
     try:
-        genai.configure(api_key=gemini_api_key)
-        # We try gemini-2.5-flash first
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
+        from core.gemini_helper import generate_content_with_rotation
+        response = generate_content_with_rotation(gemini_api_key, "gemini-2.5-flash", prompt)
         text = response.text.strip()
         if text.startswith("```"):
             first_nl = text.find("\n")
@@ -1630,9 +1628,8 @@ def parse_batch_calendar_intent(user_text, gemini_api_key):
 }}
 """
     try:
-        genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(prompt)
+        from core.gemini_helper import generate_content_with_rotation
+        response = generate_content_with_rotation(gemini_api_key, "gemini-2.5-flash", prompt)
         text = response.text.strip()
         if text.startswith("```"):
             first_nl = text.find("\n")

@@ -270,9 +270,6 @@ def process_chat(user_id, user_message, api_key):
         role_name = "個管師" if msg["role"] == "user" else "AI 助理"
         history_str += f"{role_name}: {msg['content']}\n"
         
-    # Configure Gemini
-    genai.configure(api_key=api_key)
-
     # Calculate current date in both formats
     import datetime
     today_iso = datetime.date.today().isoformat()
@@ -467,13 +464,13 @@ JSON 必須包含以下兩個鍵：
     try:
         response = None
         last_model_error = None
+        from core.gemini_helper import generate_content_with_rotation
         for model_name in MODELS_TO_TRY:
             try:
-                model = genai.GenerativeModel(model_name)
-                response = model.generate_content(prompt)
+                response = generate_content_with_rotation(api_key, model_name, prompt)
                 break  # success, stop trying
             except Exception as model_err:
-                print(f"Model {model_name} failed: {model_err}")
+                print(f"Model {model_name} failed under all keys: {model_err}")
                 last_model_error = model_err
         
         if response is None:
