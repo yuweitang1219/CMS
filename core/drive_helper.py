@@ -156,6 +156,67 @@ def upload_plan_to_drive(state, plan_text):
         print(f"Error executing file creation on Google Drive API: {e}")
         err_msg = str(e)
         err_msg_lower = err_msg.lower()
+        
+        # 404 / File not found auto-healing
+        if "file not found" in err_msg_lower or "404" in err_msg_lower or "notfound" in err_msg_lower:
+            try:
+                print("⚠️ Google Drive parent folder not found or inaccessible. Initiating auto-heal...")
+                # Search for existing app-created folder named "長照照顧計畫書"
+                query = "mimeType='application/vnd.google-apps.folder' and name='長照照顧計畫書' and trashed=false"
+                results = service.files().list(q=query, fields="files(id, name)").execute()
+                files = results.get('files', [])
+                
+                healed_folder_id = None
+                if files:
+                    healed_folder_id = files[0]['id']
+                    print(f"Auto-heal: Found existing app-created folder '{files[0]['name']}' with ID: {healed_folder_id}")
+                else:
+                    folder_metadata = {
+                        'name': '長照照顧計畫書',
+                        'mimeType': 'application/vnd.google-apps.folder'
+                    }
+                    folder = service.files().create(body=folder_metadata, fields='id').execute()
+                    healed_folder_id = folder.get('id')
+                    print(f"Auto-heal: Created new folder '長照照顧計畫書' with ID: {healed_folder_id}")
+                
+                if healed_folder_id:
+                    # Update database setting (which will propagate to SQLite & MongoDB)
+                    database.set_setting("google_drive_folder_id", healed_folder_id)
+                    print(f"Auto-heal: Updated settings database with new folder ID: {healed_folder_id}")
+                    
+                    # Update file metadata and retry creation once!
+                    file_metadata['parents'] = [healed_folder_id]
+                    fh = io.BytesIO(html_content.encode('utf-8'))
+                    media = MediaIoBaseUpload(fh, mimetype='text/html', resumable=True)
+                    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+                    
+                    file_id = file.get('id')
+                    web_link = file.get('webViewLink')
+                    
+                    # Transfer ownership if configured
+                    user_email = database.get_setting("google_user_email") or os.environ.get("GOOGLE_USER_EMAIL")
+                    if user_email:
+                        try:
+                            service.permissions().create(
+                                fileId=file_id,
+                                body={'role': 'owner', 'type': 'user', 'emailAddress': user_email},
+                                transferOwnership=True
+                            ).execute()
+                        except Exception as pe:
+                            print(f"Warning: Failed to transfer file ownership to {user_email}: {pe}")
+                            try:
+                                service.permissions().create(
+                                    fileId=file_id,
+                                    body={'role': 'writer', 'type': 'user', 'emailAddress': user_email}
+                                ).execute()
+                            except Exception:
+                                pass
+                                
+                    return {"success": True, "file_id": file_id, "link": web_link}
+            except Exception as ah_err:
+                print(f"❌ Auto-heal attempt failed: {ah_err}")
+                # Fall through to original error output
+                
         if "storagequotaexceeded" in err_msg_lower or "storage quota" in err_msg_lower or "quotaexceeded" in err_msg_lower:
             return {
                 "success": False, 
