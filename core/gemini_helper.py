@@ -32,10 +32,11 @@ def generate_content_with_rotation(api_key_str, model_name, prompt):
     if _active_key_index >= num_keys:
         _active_key_index = 0
         
+    start_idx = _active_key_index
     last_err = None
     # Try up to num_keys times, starting from the cached active index
     for attempt in range(num_keys):
-        idx = (_active_key_index + attempt) % num_keys
+        idx = (start_idx + attempt) % num_keys
         key = keys[idx]
         masked_key = key[:6] + "..." + key[-4:] if len(key) > 10 else "Invalid Key"
         try:
