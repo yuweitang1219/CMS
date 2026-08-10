@@ -9,6 +9,7 @@ else:
 
 # MongoDB connection for persistent settings in cloud environments
 _mongo_settings_col = None
+_mongo_todos_col = None
 try:
     mongo_uri = os.environ.get("MONGO_URI")
     if mongo_uri:
@@ -16,7 +17,8 @@ try:
         _mongo_client = MongoClient(mongo_uri)
         _mongo_db = _mongo_client.get_database("line_bot_db")
         _mongo_settings_col = _mongo_db.get_collection("settings")
-        print("database.py: Successfully connected to MongoDB for persistent settings!")
+        _mongo_todos_col = _mongo_db.get_collection("todos")
+        print("database.py: Successfully connected to MongoDB for settings and todos!")
 except Exception as _me:
     print("database.py: Failed to initialize MongoDB client:", _me)
 
@@ -110,6 +112,30 @@ def has_users():
 
 # --- Todo Functions ---
 def get_todos():
+    if _mongo_todos_col is not None:
+        try:
+            import datetime
+            # Fetch completed inside the last 24 hours or uncompleted todos
+            one_day_ago = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).isoformat()
+            query = {
+                "$or": [
+                    {"completed": 0},
+                    {"$and": [
+                        {"completed": 1},
+                        {"completed_at": {"$gte": one_day_ago}}
+                    ]}
+                ]
+            }
+            cursor = _mongo_todos_col.find(query).sort([("completed", 1), ("created_at", -1)])
+            todos_list = []
+            for doc in cursor:
+                doc["id"] = int(doc["_id"])  # Keep integer ID format
+                del doc["_id"]
+                todos_list.append(doc)
+            return todos_list
+        except Exception as e:
+            print(f"Error getting todos from MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     rows = cursor.execute("""
@@ -122,6 +148,27 @@ def get_todos():
     return [dict(row) for row in rows]
 
 def add_todo(title, priority='medium', due_date=None):
+    if _mongo_todos_col is not None:
+        try:
+            import time
+            import datetime
+            # Use timestamp in milliseconds as unique integer ID
+            todo_id = int(time.time() * 1000)
+            now_iso = datetime.datetime.utcnow().isoformat()
+            doc = {
+                "_id": todo_id,
+                "title": title,
+                "priority": priority,
+                "due_date": due_date,
+                "completed": 0,
+                "completed_at": None,
+                "created_at": now_iso
+            }
+            _mongo_todos_col.insert_one(doc)
+            return todo_id
+        except Exception as e:
+            print(f"Error adding todo to MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -134,6 +181,33 @@ def add_todo(title, priority='medium', due_date=None):
     return todo_id
 
 def update_todo(todo_id, title=None, priority=None, due_date=None, completed=None):
+    if _mongo_todos_col is not None:
+        try:
+            import datetime
+            # Ensure todo_id is integer
+            todo_id = int(todo_id)
+            updates = {}
+            if title is not None:
+                updates["title"] = title
+            if priority is not None:
+                updates["priority"] = priority
+            if due_date is not None:
+                updates["due_date"] = due_date
+            if completed is not None:
+                updates["completed"] = int(completed)
+                if int(completed) == 1:
+                    updates["completed_at"] = datetime.datetime.utcnow().isoformat()
+                else:
+                    updates["completed_at"] = None
+                    
+            if not updates:
+                return False
+                
+            res = _mongo_todos_col.update_one({"_id": todo_id}, {"$set": updates})
+            return res.modified_count > 0 or res.matched_count > 0
+        except Exception as e:
+            print(f"Error updating todo in MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -170,6 +244,14 @@ def update_todo(todo_id, title=None, priority=None, due_date=None, completed=Non
     return success
 
 def delete_todo(todo_id):
+    if _mongo_todos_col is not None:
+        try:
+            todo_id = int(todo_id)
+            res = _mongo_todos_col.delete_one({"_id": todo_id})
+            return res.deleted_count > 0
+        except Exception as e:
+            print(f"Error deleting todo in MongoDB: {e}")
+            
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
