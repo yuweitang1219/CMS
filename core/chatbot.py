@@ -456,8 +456,6 @@ JSON 必須包含以下兩個鍵：
     # Models to try in order (fallback if one is unavailable)
     MODELS_TO_TRY = [
         'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
         'gemini-flash-latest',
     ]
     
