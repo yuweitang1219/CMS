@@ -3447,7 +3447,10 @@ def get_manifest():
 # --- STATIC FILE ROUTING ---
 
 @app.get("/")
-def get_index():
+def get_index(request: Request):
+    ua = request.headers.get("user-agent", "").lower()
+    if "ipad" in ua or "tablet" in ua or (("android" in ua) and ("mobile" not in ua)):
+        return FileResponse("static/tablet.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
     return FileResponse("static/index.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
 @app.get("/tablet")

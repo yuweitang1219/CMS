@@ -29,6 +29,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
     <link rel="stylesheet" href="/styles.css?v=33.0">
+    <script>
+        if (window.location.pathname === "/" && (window.innerWidth <= 1024 || /iPad|Tablet|Android/i.test(navigator.userAgent))) {
+            window.location.replace("/tablet");
+        }
+    </script>
 </head>
 <body data-theme="light">
     
@@ -72,7 +77,7 @@
     </div>
 
     <!-- 2. MAIN DASHBOARD VIEW -->
-    <div id="dashboard-view" class="dashboard-container hidden">
+    <div id="dashboard-view" class="dashboard-container">
         
         <!-- Header -->
         <header class="dashboard-header">
@@ -902,6 +907,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=31.0"></script>
+    <script src="/app.js?v=32.0"></script>
 </body>
 </html>

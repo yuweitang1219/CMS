@@ -1795,8 +1795,13 @@ function toggleTheme() {
     }
 }
 
-// Restore saved theme on page load (Default to Light theme)
-const savedTheme = localStorage.getItem("app_theme") || "light";
+// Restore saved theme on page load (Default to Dark theme for tablet, Light for workstation)
+const isTabletPage = window.location.pathname.includes("tablet") || (document.body && document.body.dataset && document.body.dataset.theme === "dark");
+const defaultTheme = isTabletPage ? "dark" : "light";
+let savedTheme = defaultTheme;
+try {
+    savedTheme = localStorage.getItem("app_theme") || defaultTheme;
+} catch(e) {}
 document.documentElement.setAttribute("data-theme", savedTheme);
 document.addEventListener("DOMContentLoaded", () => {
     if (document.body) document.body.setAttribute("data-theme", savedTheme);
