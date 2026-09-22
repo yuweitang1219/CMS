@@ -1,184 +1,418 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            var payload = {
+                message: message || '',
+                source: source || '',
+                lineno: lineno || 0,
+                colno: colno || 0,
+                stack: error ? error.stack : ''
+            };
+            fetch('/api/debug/js-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(function(){});
+            return false;
+        };
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人智能生活儀表板 - 平板模式</title>
+    <title>個人智能生活儀表板 - 行事曆 & 待辦事項</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- FontAwesome -->
+    <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/styles.css?v=30.0">
-    <style>
-        body {
-            overflow: hidden;
-            height: 100vh;
-        }
-        .tablet-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            height: calc(100vh - 90px);
-            padding: 0 20px 20px 20px;
-        }
-    </style>
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="/styles.css?v=35.0">
 </head>
-<body data-theme="dark">
+<body>
     
-    <!-- Background Orbs -->
+    <!-- Background Glowing Orbs -->
     <div class="orb-container">
         <div class="orb orb-1"></div>
         <div class="orb orb-2"></div>
         <div class="orb orb-3"></div>
     </div>
 
-    <!-- Header -->
-    <header class="dashboard-header" style="margin-bottom: 15px;">
-        <div class="header-left">
-            <div class="clock-display">
-                <span id="clock-time">00:00:00</span>
-                <span id="clock-date">2026年08月14日 星期五</span>
+    <!-- 1. LOGIN / REGISTER VIEW -->
+    <div id="login-view" class="auth-container hidden">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="logo">
+                    <i class="fa-solid fa-clock-rotate-left logo-icon"></i>
+                    <span>Antigravity Dashboard</span>
+                </div>
+                <h2 id="auth-title">登入儀表板</h2>
+                <p id="auth-subtitle">請輸入您的帳號密碼以存取您的個人儀表板</p>
             </div>
+            
+            <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+                <div class="input-group">
+                    <label for="username"><i class="fa-solid fa-user"></i> 使用者名稱</label>
+                    <input type="text" id="username" required placeholder="請輸入帳號" autocomplete="username">
+                </div>
+                
+                <div class="input-group">
+                    <label for="password"><i class="fa-solid fa-lock"></i> 密碼</label>
+                    <input type="password" id="password" required placeholder="請輸入密碼" autocomplete="current-password">
+                </div>
+                
+                <div id="auth-error" class="error-msg hidden"></div>
+                
+                <button type="submit" id="auth-submit-btn" class="btn btn-primary btn-block">
+                    <span>登入</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                </button>
+            </form>
         </div>
+    </div>
+
+    <!-- 2. MAIN DASHBOARD VIEW -->
+    <div id="dashboard-view" class="dashboard-container">
         
-        <div class="header-center">
-            <div class="weather-display" id="weather-widget">
-                <div class="weather-info">
-                    <span class="weather-location"><i class="fa-solid fa-location-dot"></i> 桃園</span>
-                    <span id="weather-temp">--°C</span>
-                    <span id="weather-cond"><i class="fa-solid fa-spinner fa-spin"></i> 載入中</span>
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <div class="clock-display">
+                    <span id="clock-time">00:00:00</span>
+                    <span id="clock-date">2026年06月26日 星期五</span>
                 </div>
             </div>
-        </div>
-        
-        <div class="header-right">
-            <button class="btn btn-secondary btn-icon-only" onclick="toggleTheme()" title="切換主題">
-                <i class="fa-solid fa-sun" id="theme-icon"></i>
-            </button>
-            <button class="btn btn-secondary btn-icon-only" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
-                <i class="fa-solid fa-expand"></i>
-            </button>
-        </div>
-    </header>
-
-    <!-- Tablet Grid: Left Calendar, Right Tasks -->
-    <main class="tablet-grid">
-        
-        <!-- Left: Google Calendar -->
-        <section class="grid-card calendar-card" style="height: 100%; overflow-y: auto;">
-            <div class="card-header">
-                <div class="header-title">
-                    <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
-                    <h2>我的日程表</h2>
-                </div>
-                <div class="card-actions">
-                    <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
-                        <i class="fa-solid fa-rotate-right"></i>
-                    </button>
-                    <button class="btn btn-primary" onclick="openAddEventModal()">
-                        <i class="fa-solid fa-plus"></i> <span>安排行程</span>
-                    </button>
-                </div>
-            </div>
-
-            <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
-                <div class="disconnected-content">
-                    <div class="icon-glow">
-                        <i class="fa-brands fa-google"></i>
-                    </div>
-                    <h3>串接 Google 日曆</h3>
-                    <p>連線您的 Google 帳戶同步管理行程。</p>
-                </div>
-            </div>
-
-            <div id="calendar-connected-state" class="calendar-inner-grid">
-                <div class="mini-calendar-container">
-                    <div class="mini-calendar-header">
-                        <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
-                        <div class="calendar-title-group">
-                            <h3 id="mini-calendar-month-year">2026年8月</h3>
-                            <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
-                        </div>
-                        <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
-                    </div>
-                    <div class="mini-calendar-weekdays">
-                        <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
-                    </div>
-                    <div id="mini-calendar-days" class="mini-calendar-days">
-                        <!-- Dynamic days -->
+            
+            <!-- Real-time Weather Widget -->
+            <div class="header-center">
+                <div class="weather-display" id="weather-widget">
+                    <div class="weather-info">
+                        <span class="weather-location"><i class="fa-solid fa-location-dot"></i> 桃園</span>
+                        <span id="weather-temp">--°C</span>
+                        <span id="weather-cond"><i class="fa-solid fa-spinner fa-spin"></i> 載入中</span>
                     </div>
                 </div>
             </div>
             
-            <div class="events-timeline" style="margin-top: 15px;">
-                <div class="events-timeline-header">
-                    <h3><i class="fa-solid fa-clock-rotate-left icon-accent-calendar"></i> 當日行程明細</h3>
-                </div>
-                <div id="events-list-empty" class="empty-state hidden">
-                    <i class="fa-solid fa-calendar-minus empty-icon"></i>
-                    <p>此日期沒有安排任何行程</p>
-                </div>
-                <div id="events-list" class="events-list">
-                    <!-- Dynamic events -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Right: To-Do List -->
-        <section class="grid-card todo-card" style="height: 100%; display: flex; flex-direction: column;">
-            <div class="card-header">
-                <div class="header-title">
-                    <i class="fa-solid fa-list-check icon-accent-todo"></i>
-                    <h2>待辦事項</h2>
-                </div>
-                <div class="todo-progress-container">
-                    <div class="progress-ring-box">
-                        <svg class="progress-ring" width="46" height="46">
-                            <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
-                            <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
-                        </svg>
-                        <span id="todo-progress-percentage" class="progress-text">0%</span>
-                    </div>
-                    <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
-                </div>
-            </div>
-
-            <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
-                <div class="todo-input-row">
-                    <input type="text" id="todo-input-title" placeholder="新增待辦事項..." required autocomplete="off">
-                    <div class="todo-input-meta">
-                        <select id="todo-input-priority" class="priority-select">
-                            <option value="low">低優先權</option>
-                            <option value="medium" selected>中優先權</option>
-                            <option value="high">高優先權</option>
-                        </select>
-                        <input type="date" id="todo-input-date" class="date-select">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-todo-add">
-                    <i class="fa-solid fa-plus"></i> 新增任務
+            <div class="header-right">
+                <button class="btn btn-secondary btn-icon-only" onclick="toggleTheme()" title="切換主題" style="margin-right: 8px;">
+                    <i class="fa-solid fa-moon" id="theme-icon"></i>
                 </button>
-            </form>
-
-            <div class="todo-list-container" style="flex: 1; overflow-y: auto;">
-                <div id="todo-list-empty" class="empty-state hidden">
-                    <i class="fa-solid fa-clipboard-check empty-icon"></i>
-                    <p>目前沒有待辦事項</p>
-                </div>
-                <ul id="todo-list" class="todo-list">
-                    <!-- Dynamic items -->
-                </ul>
+                <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
+                    <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
+                </button>
             </div>
-        </section>
-    </main>
+        </header>
+
+        <!-- Main Workspace Grid -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: Google Calendar Sync -->
+            <section class="grid-card calendar-card">
+                <div class="card-header">
+                    <div class="header-title">
+                        <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
+                        <h2>我的日程表</h2>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                        <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
+                            <i class="fa-solid fa-rotate-right"></i>
+                        </button>
+                        <button class="btn btn-primary" onclick="openAddEventModal()">
+                            <i class="fa-solid fa-plus"></i> <span>安排行程</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Content -->
+                <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
+                    <div class="disconnected-content">
+                        <div class="icon-glow">
+                            <i class="fa-brands fa-google"></i>
+                        </div>
+                        <h3>串接 Google 日曆</h3>
+                        <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
+                        <button class="btn btn-primary" onclick="openSettingsModal()">
+                            <i class="fa-solid fa-link"></i> 前往設定進行授權
+                        </button>
+                    </div>
+                </div>
+
+                <div id="calendar-connected-state" class="calendar-inner-grid">
+                    <!-- Mini Month Calendar -->
+                    <div class="mini-calendar-container">
+                        <div class="mini-calendar-header">
+                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                            <div class="calendar-title-group">
+                                <h3 id="mini-calendar-month-year">2026年6月</h3>
+                                <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
+                            </div>
+                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="mini-calendar-weekdays">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="mini-calendar-days" class="mini-calendar-days">
+                            <!-- Dynamic days -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Vertical Card Split into Upper (Upcoming Events) and Lower (To-Dos) -->
+            <section class="grid-card todo-card split-vertical-card">
+                <!-- Upper Half: 接下來的行程 -->
+                <div class="split-card-section upper-section">
+                    <div class="events-timeline">
+                        <div class="events-timeline-header">
+                            <h3><i class="fa-solid fa-clock-rotate-left icon-accent-calendar"></i> 接下來的行程</h3>
+                            <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
+                                <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
+                            </button>
+                        </div>
+                        <div id="events-list-empty" class="empty-state hidden">
+                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
+                            <p>此日期沒有安排任何行程</p>
+                        </div>
+                        <div id="events-list" class="events-list">
+                            <!-- Dynamic events -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="split-section-divider"></div>
+
+                <!-- Lower Half: 待辦事項 -->
+                <div class="split-card-section lower-section">
+                    <div class="card-header">
+                        <div class="header-title">
+                            <i class="fa-solid fa-list-check icon-accent-todo"></i>
+                            <h2>待辦事項</h2>
+                        </div>
+                        <div class="todo-progress-container">
+                            <div class="progress-ring-box">
+                                <svg class="progress-ring" width="46" height="46">
+                                    <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
+                                    <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
+                                    <defs>
+                                        <linearGradient id="todo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#ff8c00" />
+                                            <stop offset="100%" stop-color="#ff007f" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
+                                <span id="todo-progress-percentage" class="progress-text">0%</span>
+                            </div>
+                            <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                        </div>
+                    </div>
+
+                <!-- Add Todo Form -->
+                <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
+                    <div class="todo-input-row">
+                        <input type="text" id="todo-input-title" placeholder="新增一個待辦事項..." required autocomplete="off">
+                        
+                        <div class="todo-input-meta">
+                            <select id="todo-input-priority" class="priority-select">
+                                <option value="low">低優先權</option>
+                                <option value="medium" selected>中優先權</option>
+                                <option value="high">高優先權</option>
+                            </select>
+                            
+                            <input type="date" id="todo-input-date" class="date-select">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-todo-add">
+                        <i class="fa-solid fa-plus"></i> 新增任務
+                    </button>
+                </form>
+
+                <!-- Todo Scroll List -->
+                <div class="todo-list-container">
+                    <div id="todo-list-empty" class="empty-state hidden">
+                        <i class="fa-solid fa-clipboard-check empty-icon"></i>
+                        <p>太棒了！目前沒有待辦事項</p>
+                    </div>
+                    <ul id="todo-list" class="todo-list">
+                        <!-- Dynamic items -->
+                    </ul>
+                </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 3. SETTINGS MODAL -->
+    <div id="settings-modal" class="modal-overlay hidden" onclick="closeSettingsModalOnOverlay(event)">
+        <div class="modal-card settings-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>系統設定與串接</h2>
+                <button class="btn-close" onclick="closeSettingsModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div class="modal-body settings-body">
+                
+                <!-- Access Info Card -->
+                <div class="settings-section info-section">
+                    <h3><i class="fa-solid fa-tower-cell"></i> 多裝置連線資訊</h3>
+                    <p>您的個人伺服器目前正在區域網路中運行。您可以使用其他裝置（手機/平板）連結至此儀表板：</p>
+                    <div class="connection-url-box">
+                        <span class="url-label">區域網路網址：</span>
+                        <code id="local-ip-address">http://正在獲取...:8000</code>
+                    </div>
+                </div>
+
+                <!-- Google Calendar Section -->
+                <div class="settings-section">
+                    <h3><i class="fa-brands fa-google"></i> Google 日曆與雲端設定</h3>
+                    
+                    <div id="google-status-connected" class="api-status-card connected hidden">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">已成功連結至 Google 帳戶</span>
+                            <span id="google-user-email" class="status-desc">user@gmail.com</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="disconnectGoogle()">解除授權</button>
+                    </div>
+
+                    <div id="google-status-disconnected" class="api-status-card disconnected">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Google 帳戶未授權</span>
+                            <span class="status-desc">請點擊下方按鈕以連結您的帳號</span>
+                        </div>
+                    </div>
+
+                    <div class="google-auth-warning-alert">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span><strong>重要提示：</strong> 授權時請務必<strong>手動勾選並允許「查看、編輯、建立和刪除 Google 雲端硬碟檔案」</strong>的權限核取方塊，否則系統將無法上傳照顧計畫書及備份待辦事項！</span>
+                    </div>
+
+                    <form id="google-settings-form" onsubmit="handleSaveGoogleSettings(event)" class="settings-form">
+                        <!-- Hidden inputs for client credentials since they are in environment variables -->
+                        <div style="display: none;">
+                            <input type="password" id="google-client-id" value="">
+                            <input type="password" id="google-client-secret" value="">
+                            <textarea id="google-service-account-json"></textarea>
+                        </div>
+
+                        <div class="input-group">
+                            <label for="google-calendar-id">Google Calendar ID (行事曆 ID)</label>
+                            <input type="text" id="google-calendar-id" placeholder="留空預設為主要日曆 (primary)" autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="google-drive-folder-id">Google Drive 雲端共用資料夾 ID</label>
+                            <input type="text" id="google-drive-folder-id" placeholder="例如：1aBcDeFgHiJkLmNoPqRsTuVwXyZ" autocomplete="off">
+                        </div>
+                        <div class="input-group">
+                            <label for="google-starting-address">服務起點地址 (選填，用於計算家訪車程)</label>
+                            <input type="text" id="google-starting-address" placeholder="例如：桃園市中壢區健行路229號" autocomplete="off">
+                        </div>
+                        
+                        <div class="settings-action-row">
+                            <button type="submit" class="btn btn-primary">儲存日曆設定並連結帳號</button>
+                        </div>
+                    </form>
+                </div>
+
+                <hr class="settings-divider">
+
+                <!-- Line Bot Section -->
+                <div class="settings-section">
+                    <h3><i class="fa-brands fa-line"></i> Line Bot 串接設定</h3>
+                    
+                    <div id="line-status-connected" class="api-status-card connected hidden">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Line Webhook 機制運作中</span>
+                            <span class="status-desc">已成功同步 Line 遠端機器人</span>
+                        </div>
+                    </div>
+
+                    <div id="line-status-disconnected" class="api-status-card disconnected hidden">
+                        <div class="status-indicator-dot"></div>
+                        <div class="status-info">
+                            <span class="status-title">Line 未啟動</span>
+                            <span class="status-desc">請檢查雲端環境變數是否設定正確</span>
+                        </div>
+                    </div>
+
+                    <form id="line-settings-form" onsubmit="handleSaveLineSettings(event)" class="settings-form">
+                        <div class="input-group">
+                            <label>Line Webhook 網址 (請複製到 Line Console)</label>
+                            <div class="copy-input-row">
+                                <input type="text" id="line-webhook-url" readonly value="http://localhost:8000/api/line/webhook">
+                                <button type="button" class="btn btn-secondary" onclick="copyWebhookUrl()"><i class="fa-solid fa-copy"></i> 複製</button>
+                            </div>
+                        </div>
+
+                        <!-- Hidden Line credentials since they are permanently managed in Render Environment -->
+                        <div style="display: none;">
+                            <input type="password" id="line-channel-token" value="placeholder">
+                            <input type="password" id="line-channel-secret" value="placeholder">
+                            <input type="password" id="line-user-id" value="placeholder">
+                            <input type="password" id="gemini-api-key" value="placeholder">
+                        </div>
+
+                        <div class="settings-action-row" style="margin-top: 10px;">
+                            <span class="input-helper" style="font-size: 0.85rem; color: var(--text-muted);">
+                                💡 LINE 機器人的存取憑證與金鑰已加密保存在雲端主機中，確保您的個人資料安全。
+                            </span>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. ADD CALENDAR EVENT MODAL -->
+    <div id="add-event-modal" class="modal-overlay hidden" onclick="closeAddEventModalOnOverlay(event)">
+        <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>安排新行程</h2>
+                <button class="btn-close" onclick="closeAddEventModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="event-form" onsubmit="handleCreateEvent(event)">
+                <div class="modal-body">
+                    <div class="input-group">
+                        <label for="event-summary"><i class="fa-solid fa-heading"></i> 行程名稱</label>
+                        <input type="text" id="event-summary" required placeholder="例如：與客戶召開會議" autocomplete="off">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="event-description"><i class="fa-solid fa-align-left"></i> 詳細內容 / 備註</label>
+                        <textarea id="event-description" placeholder="例如：討論專案進度與預算規劃..." rows="3"></textarea>
+                    </div>
+                    
+                    <div class="modal-form-row">
+                        <div class="input-group">
+                            <label for="event-start"><i class="fa-solid fa-clock"></i> 開始時間</label>
+                            <input type="datetime-local" id="event-start" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="event-end"><i class="fa-solid fa-clock"></i> 結束時間</label>
+                            <input type="datetime-local" id="event-end" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddEventModal()">取消</button>
+                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calendar-check"></i> 建立行程</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Notification Toast -->
     <div id="toast" class="toast-container hidden">
         <span id="toast-message">提示訊息</span>
     </div>
 
-    <script src="/app.js?v=32.0"></script>
+    <!-- Main JS logic -->
+    <script src="/app.js?v=35.0"></script>
 </body>
 </html>
