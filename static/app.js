@@ -687,20 +687,7 @@ function renderEvents() {
                 return false;
             }
 
-            // If selected date is TODAY, filter out events whose time slot has ALREADY PASSED!
-            if (isSelectedDateToday) {
-                if (event.end && event.end.dateTime) {
-                    const eventEndDate = new Date(event.end.dateTime);
-                    if (now > eventEndDate) {
-                        return false; // Time slot has passed -> hide from "接下來的行程" on dashboard
-                    }
-                } else if (event.start && event.start.dateTime) {
-                    const eventStartDate = new Date(event.start.dateTime);
-                    if (now.getTime() > eventStartDate.getTime() + 3600000) {
-                        return false;
-                    }
-                }
-            }
+            // Keep all events of the selected day visible on the electronic signage
             return true;
         });
 
