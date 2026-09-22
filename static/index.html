@@ -28,9 +28,9 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=20.0">
+    <link rel="stylesheet" href="/styles.css?v=33.0">
 </head>
-<body>
+<body data-theme="light">
     
     <!-- Background Glowing Orbs -->
     <div class="orb-container">
@@ -77,9 +77,15 @@
         <!-- Header -->
         <header class="dashboard-header">
             <div class="header-left">
+                <div class="logo-group">
+                    <div style="width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, #0284c7 0%, #059669 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3); flex-shrink: 0;">
+                        <i class="fa-solid fa-notes-medical" style="font-size: 1.1rem; color: #ffffff;"></i>
+                    </div>
+                    <span style="font-family: inherit; font-size: 1.15rem; font-weight: 800; color: var(--text-primary); letter-spacing: 0.5px;">長照個案管理智能助理</span>
+                </div>
                 <div class="clock-display">
                     <span id="clock-time">00:00:00</span>
-                    <span id="clock-date">2026年06月26日 星期五</span>
+                    <span id="clock-date">2026年08月17日 星期一</span>
                 </div>
             </div>
             
@@ -95,151 +101,516 @@
             </div>
             
             <div class="header-right">
-                <button class="btn btn-secondary" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
-                    <i class="fa-solid fa-expand"></i> <span>全螢幕</span>
+                <button class="btn btn-secondary" onclick="openCaseSelectorModal()" title="載入個案資料">
+                    <i class="fa-solid fa-folder-open"></i> <span>個案清單</span>
+                </button>
+                <button class="btn btn-secondary" onclick="syncCalendarFromWeb()" title="同步至 Google 行事曆">
+                    <i class="fa-solid fa-calendar-check"></i> <span>同步日曆</span>
+                </button>
+                <button class="btn btn-primary btn-glow" onclick="generateCarePlan()" title="生成照顧計畫書 PDF/Word" style="box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);">
+                    <i class="fa-solid fa-file-export"></i> <span>產出計畫書</span>
+                </button>
+                <button class="btn btn-secondary" onclick="openUpdateModal()" title="檢查與線上更新軟體">
+                    <i class="fa-solid fa-arrows-rotate"></i> <span>程式更新</span>
+                </button>
+                <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+                <button class="btn btn-secondary btn-icon-only" id="fullscreen-btn" onclick="toggleFullscreen()" title="切換全螢幕">
+                    <i class="fa-solid fa-expand"></i>
                 </button>
             </div>
         </header>
 
-        <!-- Main Workspace Grid -->
-        <main class="dashboard-grid">
+        <!-- Main Workstation 3-Column Layout -->
+        <div class="workstation-container">
             
-            <!-- Left Side: Google Calendar Sync -->
-            <section class="grid-card calendar-card">
-                <div class="card-header">
-                    <div class="header-title">
-                        <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
-                        <h2>我的日程表</h2>
-                    </div>
-                    <div class="card-actions">
-                        <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
-                            <i class="fa-solid fa-gear"></i>
-                        </button>
-                        <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
-                            <i class="fa-solid fa-rotate-right"></i>
-                        </button>
-                        <button class="btn btn-primary" onclick="openAddEventModal()">
-                            <i class="fa-solid fa-plus"></i> <span>安排行程</span>
-                        </button>
+            <!-- Left Column: Resident Profile Cards Sidebar (Design Mockup Layout) -->
+            <aside class="workstation-sidebar">
+                <div class="sidebar-search-box">
+                    <i class="fa-solid fa-magnifying-glass sidebar-search-icon"></i>
+                    <input type="text" placeholder="搜尋個案..." class="sidebar-search-input" id="sidebar-case-search">
+                </div>
+                
+                <div style="font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin: 4px 0 2px 2px;">
+                    在管個案 (RESIDENTS)
+                </div>
+                
+                <div class="resident-card-list" id="sidebar-resident-list">
+                    <div style="padding: 20px 10px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                        <i class="fa-solid fa-folder-open" style="margin-bottom: 8px; font-size: 1.3rem; display: block; opacity: 0.6;"></i>
+                        尚無個案資料<br>
+                        <span style="font-size: 0.75rem; opacity: 0.8;">點擊「個案清單」或透過 AI 建立</span>
                     </div>
                 </div>
-
-                <!-- Calendar Content -->
-                <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
-                    <div class="disconnected-content">
-                        <div class="icon-glow">
-                            <i class="fa-brands fa-google"></i>
+            </aside>
+            
+            <!-- Workstation Middle Stage: Case Builder Form & Agenda Tabs -->
+            <div class="workstation-left">
+                
+                <!-- Tab Navbar -->
+                <div class="tab-navbar">
+                    <div class="tab-btn-group">
+                        <button class="tab-btn active" id="tab-btn-builder" onclick="switchWorktab('builder')">
+                            <i class="fa-solid fa-id-card"></i> <span>個案填報與即時評估表</span>
+                        </button>
+                        <button class="tab-btn" id="tab-btn-agenda" onclick="switchWorktab('agenda')">
+                            <i class="fa-solid fa-calendar-days"></i> <span>Google 日程與待辦事項</span>
+                        </button>
+                    </div>
+                    
+                    <div class="tab-navbar-right" style="display: flex; align-items: center; gap: 10px;">
+                        <div class="case-badge-pill" id="current-case-badge">
+                            <i class="fa-solid fa-user-check"></i>
+                            <span id="case-badge-text">目前個案：未提供資料</span>
                         </div>
-                        <h3>串接 Google 日曆</h3>
-                        <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
-                        <button class="btn btn-primary" onclick="openSettingsModal()">
-                            <i class="fa-solid fa-link"></i> 前往設定進行授權
+                        <button type="button" class="btn-toggle-ai-pill" id="btn-toggle-ai-header" onclick="toggleRightSidebar()" title="開啟/收合 AI 助理">
+                            <i class="fa-solid fa-robot"></i>
+                            <span class="ai-toggle-text">AI 助理</span>
                         </button>
                     </div>
                 </div>
 
-                <div id="calendar-connected-state" class="calendar-inner-grid">
-                    <!-- Mini Month Calendar -->
-                    <div class="mini-calendar-container">
-                        <div class="mini-calendar-header">
-                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
-                            <div class="calendar-title-group">
-                                <h3 id="mini-calendar-month-year">2026年6月</h3>
-                                <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
+                <!-- Tab Pane 1: Care Plan & Case Builder Forms -->
+                <div class="tab-pane" id="pane-case-builder">
+
+                    <!-- High-End Summary Metrics Bar -->
+                    <div class="metrics-summary-grid">
+                        <div class="metric-card">
+                            <div class="metric-icon cyan"><i class="fa-solid fa-user"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-label">當前個案</span>
+                                <h3 id="metric-case-name" class="metric-value">未加載個案</h3>
                             </div>
-                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
                         </div>
-                        <div class="mini-calendar-weekdays">
-                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
-                        </div>
-                        <div id="mini-calendar-days" class="mini-calendar-days">
-                            <!-- Dynamic days -->
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Right Side: Vertical Card Split into Upper (Upcoming Events) and Lower (To-Dos) -->
-            <section class="grid-card todo-card split-vertical-card">
-                <!-- Upper Half: 接下來的行程 -->
-                <div class="split-card-section upper-section">
-                    <div class="events-timeline">
-                        <div class="events-timeline-header">
-                            <h3><i class="fa-solid fa-clock-rotate-left icon-accent-calendar"></i> 接下來的行程</h3>
-                            <button class="btn btn-secondary btn-sm" id="fullscreen-btn-inline" onclick="toggleFullscreen()" title="切換全螢幕">
-                                <i class="fa-solid fa-compress"></i> <span>視窗模式</span>
-                            </button>
-                        </div>
-                        <div id="events-list-empty" class="empty-state hidden">
-                            <i class="fa-solid fa-calendar-minus empty-icon"></i>
-                            <p>此日期沒有安排任何行程</p>
-                        </div>
-                        <div id="events-list" class="events-list">
-                            <!-- Dynamic events -->
-                        </div>
-                    </div>
-                </div>
-
-                <div class="split-section-divider"></div>
-
-                <!-- Lower Half: 待辦事項 -->
-                <div class="split-card-section lower-section">
-                    <div class="card-header">
-                        <div class="header-title">
-                            <i class="fa-solid fa-list-check icon-accent-todo"></i>
-                            <h2>待辦事項</h2>
-                        </div>
-                        <div class="todo-progress-container">
-                            <div class="progress-ring-box">
-                                <svg class="progress-ring" width="46" height="46">
-                                    <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
-                                    <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
-                                    <defs>
-                                        <linearGradient id="todo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#ff8c00" />
-                                            <stop offset="100%" stop-color="#ff007f" />
-                                        </linearGradient>
-                                    </defs>
-                                </svg>
-                                <span id="todo-progress-percentage" class="progress-text">0%</span>
+                        <div class="metric-card">
+                            <div class="metric-icon purple"><i class="fa-solid fa-notes-medical"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-label">長照等級 (CMS)</span>
+                                <h3 id="metric-cms-level" class="metric-value">等級 --</h3>
                             </div>
-                            <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon emerald"><i class="fa-solid fa-calculator"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-label">交通區劃分</span>
+                                <h3 id="metric-fee-estimate" class="metric-value">一般區 (1區)</h3>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon orange"><i class="fa-solid fa-calendar-day"></i></div>
+                            <div class="metric-data">
+                                <span class="metric-label">訪視排程</span>
+                                <h3 id="metric-visit-date" class="metric-value">未排定</h3>
+                            </div>
                         </div>
                     </div>
 
-                <!-- Add Todo Form -->
-                <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
-                    <div class="todo-input-row">
-                        <input type="text" id="todo-input-title" placeholder="新增一個待辦事項..." required autocomplete="off">
+                    <div class="case-builder-card">
                         
-                        <div class="todo-input-meta">
-                            <select id="todo-input-priority" class="priority-select">
-                                <option value="low">低優先權</option>
-                                <option value="medium" selected>中優先權</option>
-                                <option value="high">高優先權</option>
-                            </select>
+                        <!-- 1. 基本概況 -->
+                        <div class="form-section">
+                            <div class="section-title">
+                                <i class="fa-solid fa-user"></i> <span>個案基本概況與訪視時間</span>
+                            </div>
+                            <div class="form-grid-3">
+                                <div class="form-control-group">
+                                    <label for="cb-name">個案姓名</label>
+                                    <input type="text" id="cb-name" class="form-control-input" placeholder="例如：張阿公" oninput="updateStateFromForm()" onchange="updateStateFromForm()">
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-birthYear">出生年份 (民國)</label>
+                                    <input type="text" id="cb-birthYear" class="form-control-input" placeholder="例如：37" oninput="updateStateFromForm()" onchange="updateStateFromForm()">
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-gender">性別</label>
+                                    <select id="cb-gender" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="男">男</option>
+                                        <option value="女">女</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-statusVal">身分別</label>
+                                    <select id="cb-statusVal" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="1">第三類 (一般戶 16%)</option>
+                                        <option value="2">第二類 (中低收入戶 5%)</option>
+                                        <option value="3">第一類 (低收入戶 0%)</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-visitDate">訪視日期</label>
+                                    <input type="date" id="cb-visitDate" class="form-control-input" oninput="updateStateFromForm()" onchange="updateStateFromForm()">
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-visitTime">訪視時間</label>
+                                    <input type="time" id="cb-visitTime" class="form-control-input" oninput="updateStateFromForm()" onchange="updateStateFromForm()">
+                                </div>
+                            </div>
                             
-                            <input type="date" id="todo-input-date" class="date-select">
+                            <div class="form-grid-2" style="margin-top: 12px;">
+                                <div class="form-control-group">
+                                    <label for="cb-address">住家地址 (包含中壢會自動鎖定交通2區)</label>
+                                    <input type="text" id="cb-address" class="form-control-input" placeholder="例如：桃園市中壢區中山路100號" oninput="updateStateFromForm()" onchange="updateStateFromForm()">
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-planType">計畫類型</label>
+                                    <select id="cb-planType" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="ReEval">單位複評計畫擬定 (複評)</option>
+                                        <option value="AA01">AA01家訪擬定照顧計畫 (AA01)</option>
+                                        <option value="ChuZhun">出院準備家訪 (出準)</option>
+                                        <option value="NewCase">新案家訪 (新案)</option>
+                                        <option value="CoVisit">共訪</option>
+                                        <option value="PlanChange">計畫異動</option>
+                                        <option value="Private">私人行程/開會休假</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. 臨床與長照需求評估 -->
+                        <div class="form-section">
+                            <div class="section-title">
+                                <i class="fa-solid fa-stethoscope"></i> <span>長照級數與臨床評估</span>
+                            </div>
+                            <div class="form-grid-3">
+                                <div class="form-control-group">
+                                    <label for="cb-cmsLvl">CMS 長照等級</label>
+                                    <select id="cb-cmsLvl" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="2">第 2 級 (輕度)</option>
+                                        <option value="3">第 3 級</option>
+                                        <option value="4">第 4 級 (中度)</option>
+                                        <option value="5">第 5 級</option>
+                                        <option value="6">第 6 級 (重度)</option>
+                                        <option value="7">第 7 級</option>
+                                        <option value="8">第 8 級 (極重度)</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-trafLvl">交通地區分類</label>
+                                    <select id="cb-trafLvl" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="1">第 1 類 (一般地區 $1,680)</option>
+                                        <option value="2">第 2 類 (桃園/中壢等 $1,840)</option>
+                                        <option value="3">第 3 類 ($2,000)</option>
+                                        <option value="4">第 4 類 (偏鄉 $2,400)</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-hasF">聘僱外籍看護工</label>
+                                    <select id="cb-hasF" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="false">否 (完整照顧額度)</option>
+                                        <option value="true">是 (額度折減30%)</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-livingStr">居住型態</label>
+                                    <select id="cb-livingStr" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="與子女同住">與子女同住</option>
+                                        <option value="獨居">獨居</option>
+                                        <option value="與配偶同住">與配偶同住</option>
+                                        <option value="老老照顧">老老照顧</option>
+                                        <option value="與其他家屬同住">與其他家屬同住</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-burdenStr">主要照顧者負荷</label>
+                                    <select id="cb-burdenStr" class="form-control-select" onchange="updateStateFromForm()">
+                                        <option value="無明顯負荷">無明顯負荷</option>
+                                        <option value="需輪班工作/無替手">需輪班工作/無替手</option>
+                                        <option value="自身有慢性病/年邁">自身有慢性病/年邁</option>
+                                        <option value="照顧技巧不足">照顧技巧不足</option>
+                                        <option value="經濟困難">經濟困難</option>
+                                    </select>
+                                </div>
+                                <div class="form-control-group">
+                                    <label for="cb-specialistName">照顧專員 (照專)</label>
+                                    <input type="text" id="cb-specialistName" class="form-control-input" placeholder="例如：陳美麗" onchange="updateStateFromForm()">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. 已配置長照服務代碼 -->
+                        <div class="form-section">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div class="section-title" style="margin-bottom: 0;">
+                                    <i class="fa-solid fa-hand-holding-hand"></i> <span>目前核定與配置服務代碼</span>
+                                </div>
+                                <select id="quick-add-service-select" class="service-pill-select" onchange="handleAddServiceFromSelect(this.value); this.value='';">
+                                    <option value="">＋ 新增服務項目...</option>
+                                    <option value="BA01">BA01 基本身體清潔 ($260)</option>
+                                    <option value="BA02">BA02 基本日常照顧 ($195)</option>
+                                    <option value="BA04">BA04 協助進食或管灌 ($130)</option>
+                                    <option value="BA05">BA05 餐食照顧 ($310)</option>
+                                    <option value="BA07">BA07 協助沐浴及洗頭 ($325)</option>
+                                    <option value="BA08">BA08 足部照護 ($500)</option>
+                                    <option value="BA10">BA10 翻身拍背 ($155)</option>
+                                    <option value="BA11">BA11 肢體關節活動 ($195)</option>
+                                    <option value="BA12">BA12 協助上下樓梯 ($130)</option>
+                                    <option value="BA13">BA13 陪同外出 ($195)</option>
+                                    <option value="BA14">BA14 陪同就醫 ($685)</option>
+                                    <option value="BA15">BA15 家務服務 ($195)</option>
+                                    <option value="BA16">BA16 代購代送 ($130)</option>
+                                    <option value="BA18">BA18 安全看視 ($200)</option>
+                                    <option value="BA20">BA20 陪伴服務 ($175)</option>
+                                    <option value="BA22">BA22 巡視服務 ($130)</option>
+                                    <option value="BA23">BA23 協助洗頭 ($200)</option>
+                                    <option value="BA24">BA24 協助排泄 ($220)</option>
+                                    <option value="CA08">CA08 個別化服務計畫 ($1500)</option>
+                                    <option value="CB01">CB01 營養照護 ($1500)</option>
+                                    <option value="CD02">CD02 居家護理指導 ($1500)</option>
+                                    <option value="GA09">GA09 居家喘息2小時 ($770)</option>
+                                </select>
+                            </div>
+                            <div id="active-services-container" class="services-chip-grid">
+                                <!-- Dynamic Service Tags -->
+                                <span class="service-code-tag"><i class="fa-solid fa-check"></i> 尚無配置服務代碼</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Tab Pane 2: Google Calendar & Tasks Agenda -->
+                <div class="tab-pane hidden" id="pane-agenda">
+                    <main class="dashboard-grid" style="grid-template-columns: 1.1fr 0.9fr; gap: 16px;">
+                        
+                        <!-- Left Side: Google Calendar Sync -->
+                        <section class="grid-card calendar-card">
+                            <div class="card-header">
+                                <div class="header-title">
+                                    <i class="fa-solid fa-calendar-days icon-accent-calendar"></i>
+                                    <h2>我的日程表</h2>
+                                </div>
+                                <div class="card-actions">
+                                    <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
+                                        <i class="fa-solid fa-gear"></i>
+                                    </button>
+                                    <button class="btn btn-secondary btn-icon-only" onclick="fetchEvents()" title="重新整理">
+                                        <i class="fa-solid fa-rotate-right"></i>
+                                    </button>
+                                    <button class="btn btn-primary" onclick="openAddEventModal()">
+                                        <i class="fa-solid fa-plus"></i> <span>安排行程</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- AI Quick Event Schedule Bar -->
+                            <div class="ai-quick-schedule-bar">
+                                <div class="ai-input-group">
+                                    <span class="ai-sparkle-badge"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 智能排行程</span>
+                                    <input type="text" id="dashboard-ai-event-input" placeholder="說或輸入：「8/20下午2點訪視張阿公」或「明天早上9點開會」..." oninput="handleAIInputLive(this.value)" onkeydown="if(event.key==='Enter') submitDashboardAIEvent()">
+                                    <button type="button" class="voice-mic-btn" id="dashboard-mic-btn" onclick="toggleVoiceInput('dashboard-ai-event-input', 'dashboard-mic-btn')" title="點擊進行語音輸入 (說話新增)">
+                                        <i class="fa-solid fa-microphone"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-ai-submit" id="dashboard-ai-submit-btn" onclick="submitDashboardAIEvent()" title="智慧判讀並展開確認卡片">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>智慧排行程</span>
+                                    </button>
+                                </div>
+                                <div id="dashboard-ai-event-status" class="ai-quick-status-msg hidden"></div>
+
+                                <!-- Inline Smart Schedule Card -->
+                                <div id="inline-smart-schedule-card" class="inline-smart-card hidden">
+                                    <div class="inline-card-header">
+                                        <div class="inline-card-title">
+                                            <i class="fa-solid fa-calendar-check text-primary"></i>
+                                            <span>行程建立前確認與編輯</span>
+                                        </div>
+                                        <button type="button" class="btn-close-card" onclick="closeInlineSmartCard()"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                    <div class="inline-card-body">
+                                        <div class="inline-field-group">
+                                            <label><i class="fa-solid fa-heading"></i> 行程名稱</label>
+                                            <input type="text" id="inline-event-summary" placeholder="例如：訪視張阿公">
+                                        </div>
+                                        <div class="inline-time-row">
+                                            <div class="inline-field-group">
+                                                <label><i class="fa-solid fa-clock"></i> 開始時間</label>
+                                                <input type="datetime-local" id="inline-event-start">
+                                            </div>
+                                            <div class="inline-field-group">
+                                                <label><i class="fa-solid fa-clock"></i> 結束時間</label>
+                                                <input type="datetime-local" id="inline-event-end">
+                                            </div>
+                                        </div>
+                                        <div class="inline-quick-chips">
+                                            <span class="chip-label">快捷時間：</span>
+                                            <button type="button" class="time-chip" onclick="applyInlineTimeChip('today-pm')">今天 14:00</button>
+                                            <button type="button" class="time-chip" onclick="applyInlineTimeChip('tomorrow-am')">明天 09:00</button>
+                                            <button type="button" class="time-chip" onclick="applyInlineTimeChip('tomorrow-pm')">明天 14:00</button>
+                                            <button type="button" class="time-chip" onclick="applyInlineTimeChip('next-mon-am')">下週一 09:00</button>
+                                        </div>
+                                        <div id="inline-batch-preview" class="inline-batch-preview hidden"></div>
+                                    </div>
+                                    <div class="inline-card-footer">
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="closeInlineSmartCard()">取消</button>
+                                        <button type="button" class="btn btn-primary btn-sm" id="inline-confirm-submit-btn" onclick="confirmSaveInlineSmartCard()">
+                                            <i class="fa-solid fa-cloud-arrow-up"></i> <span>確認建立至 Google 日曆</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="calendar-disconnected-state" class="calendar-disconnected-overlay hidden">
+                                <div class="disconnected-content">
+                                    <div class="icon-glow">
+                                        <i class="fa-brands fa-google"></i>
+                                    </div>
+                                    <h3>串接 Google 日曆</h3>
+                                    <p>連線您的 Google 帳戶，即可在此處與您的其他裝置同步管理行程。</p>
+                                    <button class="btn btn-primary" onclick="openSettingsModal()">
+                                        <i class="fa-solid fa-link"></i> 前往設定進行授權
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="calendar-connected-state" class="calendar-inner-grid">
+                                <div class="mini-calendar-container">
+                                    <div class="mini-calendar-header">
+                                        <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
+                                        <div class="calendar-title-group">
+                                            <h3 id="mini-calendar-month-year">2026年6月</h3>
+                                            <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
+                                        </div>
+                                        <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                                    </div>
+                                    <div class="mini-calendar-weekdays">
+                                        <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                                    </div>
+                                    <div id="mini-calendar-days" class="mini-calendar-days">
+                                        <!-- Dynamic days -->
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Right Side: Split Tasks & Timeline -->
+                        <section class="grid-card todo-card split-vertical-card">
+                            <div class="split-card-section upper-section">
+                                <div class="events-timeline">
+                                    <div class="events-timeline-header">
+                                        <h3><i class="fa-solid fa-clock-rotate-left icon-accent-calendar"></i> 接下來的行程</h3>
+                                    </div>
+                                    <div id="events-list-empty" class="empty-state hidden">
+                                        <i class="fa-solid fa-calendar-minus empty-icon"></i>
+                                        <p>此日期沒有安排任何行程</p>
+                                    </div>
+                                    <div id="events-list" class="events-list">
+                                        <!-- Dynamic events -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="split-section-divider"></div>
+
+                            <div class="split-card-section lower-section">
+                                <div class="card-header">
+                                    <div class="header-title">
+                                        <i class="fa-solid fa-list-check icon-accent-todo"></i>
+                                        <h2>待辦事項</h2>
+                                    </div>
+                                    <div class="todo-progress-container">
+                                        <div class="progress-ring-box">
+                                            <svg class="progress-ring" width="46" height="46">
+                                                <circle class="progress-ring-bg" stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="23" cy="23"/>
+                                                <circle id="todo-progress-circle" class="progress-ring-bar" stroke="url(#todo-gradient)" stroke-width="4" stroke-dasharray="113" stroke-dashoffset="113" stroke-linecap="round" fill="transparent" r="18" cx="23" cy="23"/>
+                                            </svg>
+                                            <span id="todo-progress-percentage" class="progress-text">0%</span>
+                                        </div>
+                                        <span id="todo-progress-count" class="todo-progress-label">0 / 0 完成</span>
+                                    </div>
+                                </div>
+
+                                <form id="todo-form" onsubmit="handleAddTodo(event)" class="todo-input-form">
+                                    <div class="todo-input-row">
+                                        <input type="text" id="todo-input-title" placeholder="新增待辦事項..." required autocomplete="off">
+                                        <div class="todo-input-meta">
+                                            <select id="todo-input-priority" class="priority-select">
+                                                <option value="low">低優先權</option>
+                                                <option value="medium" selected>中優先權</option>
+                                                <option value="high">高優先權</option>
+                                            </select>
+                                            <input type="date" id="todo-input-date" class="date-select">
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-todo-add">
+                                        <i class="fa-solid fa-plus"></i> 新增任務
+                                    </button>
+                                </form>
+
+                                <div class="todo-list-container">
+                                    <div id="todo-list-empty" class="empty-state hidden">
+                                        <i class="fa-solid fa-clipboard-check empty-icon"></i>
+                                        <p>目前沒有待辦事項</p>
+                                    </div>
+                                    <ul id="todo-list" class="todo-list">
+                                        <!-- Dynamic items -->
+                                    </ul>
+                                </div>
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            </div>
+
+            <!-- Workstation Right: Standalone AI Chatbot Sidebar -->
+            <aside class="ai-chat-sidebar" id="ai-chat-sidebar">
+                <div class="ai-sidebar-header">
+                    <div class="ai-bot-info">
+                        <div class="ai-bot-avatar">
+                            <i class="fa-solid fa-robot"></i>
+                        </div>
+                        <div>
+                            <div class="ai-bot-name">長照 AI 專家助理</div>
+                            <div class="ai-bot-status">
+                                <span class="status-dot-pulse"></span> 在線即時同步中
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-todo-add">
-                        <i class="fa-solid fa-plus"></i> 新增任務
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <button class="btn btn-secondary btn-sm" onclick="resetChatSession()" title="清除目前紀錄">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                        <button type="button" class="btn-sidebar-toggle" id="btn-toggle-right-sidebar" onclick="toggleRightSidebar()" title="收合右側 AI 助理">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="ai-messages-container" id="ai-messages-container">
+                    <div class="chat-bubble assistant">
+                        您好！我是您的長照 AI 專屬助理 🤖<br>您可以直接對我說話或輸入，例如：<br>• 「記錄新個案張阿公，80歲，CMS 4級，住在中壢」<br>• 「幫他安排明天下午兩點家訪並建立行事曆」<br>左側表單將隨我們的對話即時自動更新！
+                    </div>
+                </div>
+
+                <!-- Quick Action Chips -->
+                <div class="quick-chips-scroll">
+                    <button class="chip-btn" onclick="sendQuickChat('建立行事曆')">📅 排入行事曆</button>
+                    <button class="chip-btn" onclick="generateCarePlan()">📄 產出計畫書</button>
+                    <button class="chip-btn" onclick="sendQuickChat('前後次對比摘要')">🔍 歷史差異對比</button>
+                    <button class="chip-btn" onclick="openCaseSelectorModal()">📂 個案清單</button>
+                    <button class="chip-btn" onclick="resetChatSession()">🧹 重新開始</button>
+                </div>
+
+                <!-- Chat Input Form -->
+                <form id="ai-chat-form" onsubmit="handleSendChat(event)" class="ai-input-form">
+                    <input type="text" id="ai-chat-input" class="ai-chat-input" placeholder="輸入對話或指令..." autocomplete="off">
+                    <button type="button" class="btn-voice-chat" id="btn-voice-chat" onclick="toggleVoiceInput()" title="語音輸入">
+                        <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <button type="submit" class="btn-send-chat" title="傳送">
+                        <i class="fa-solid fa-paper-plane"></i>
                     </button>
                 </form>
-
-                <!-- Todo Scroll List -->
-                <div class="todo-list-container">
-                    <div id="todo-list-empty" class="empty-state hidden">
-                        <i class="fa-solid fa-clipboard-check empty-icon"></i>
-                        <p>太棒了！目前沒有待辦事項</p>
-                    </div>
-                    <ul id="todo-list" class="todo-list">
-                        <!-- Dynamic items -->
-                    </ul>
+            </aside>
+            
+            <!-- Floating Restore Button when Right AI Panel is Collapsed -->
+            <button type="button" class="btn-restore-ai-float" id="btn-restore-ai-float" onclick="toggleRightSidebar()" title="點擊展開 AI 助理">
+                <i class="fa-solid fa-chevron-left"></i>
+                <div class="restore-icon-box">
+                    <i class="fa-solid fa-robot"></i>
                 </div>
-                </div>
-            </section>
-        </main>
+                <span>展開 AI 助理</span>
+            </button>
+        </div>
     </div>
 
     <!-- 3. SETTINGS MODAL -->
@@ -351,12 +722,45 @@
                             <input type="password" id="line-channel-token" value="placeholder">
                             <input type="password" id="line-channel-secret" value="placeholder">
                             <input type="password" id="line-user-id" value="placeholder">
-                            <input type="password" id="gemini-api-key" value="placeholder">
                         </div>
 
                         <div class="settings-action-row" style="margin-top: 10px;">
                             <span class="input-helper" style="font-size: 0.85rem; color: var(--text-muted);">
-                                💡 LINE 機器人的存取憑證與金鑰已加密保存在雲端主機中，確保您的個人資料安全。
+                                💡 LINE 機器人的存取憑證已加密保存在雲端主機中，確保您的個人資料安全。
+                            </span>
+                        </div>
+                    </form>
+                </div>
+
+                <hr class="settings-divider">
+
+                <!-- Gemini AI API Key Section -->
+                <div class="settings-section">
+                    <h3><i class="fa-solid fa-brain"></i> Gemini AI 核心引擎設定</h3>
+                    
+                    <div id="gemini-status-card" class="api-status-card connected" style="margin-bottom: 14px;">
+                        <div class="status-indicator-dot" style="background: #a855f7; box-shadow: 0 0 10px #a855f7;"></div>
+                        <div class="status-info">
+                            <span class="status-title">Gemini AI 智能解析模組</span>
+                            <span id="gemini-key-hint" class="status-desc">支援個案自然語言建檔、行程排定與照護計畫分析</span>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.86rem; line-height: 1.6; color: var(--text-secondary);">
+                        <strong style="color: #c084fc;"><i class="fa-solid fa-circle-info"></i> 關於 Google AI Studio API 金鑰說明：</strong><br>
+                        • 系統全面支援 Google 官方最新的 <code style="color: #38bdf8; font-weight: bold;">AQ.</code> 開頭金鑰以及經典的 <code style="color: #38bdf8; font-weight: bold;">AIzaSy...</code> 金鑰。<br>
+                        • 若您未曾取得 API 金鑰，可前往免費取得：<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #38bdf8; text-decoration: underline; font-weight: bold;">Google AI Studio 申請 API Key (免費) <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 0.75rem;"></i></a>
+                    </div>
+
+                    <form id="gemini-settings-form" onsubmit="handleSaveGeminiKey(event)" class="settings-form">
+                        <div class="input-group">
+                            <label for="gemini-api-key">Gemini API Key (支援 AQ. 或 AIzaSy 格式，多組以逗號分隔)</label>
+                            <div class="copy-input-row">
+                                <input type="text" id="gemini-api-key" placeholder="貼上您的 AQ. 或 AIzaSy 開頭金鑰" autocomplete="off">
+                                <button type="submit" class="btn btn-primary" style="white-space: nowrap;"><i class="fa-solid fa-floppy-disk"></i> 儲存金鑰</button>
+                            </div>
+                            <span class="input-helper" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">
+                                💡 支援貼上多組金鑰（以逗號區隔），當某組金鑰達額度上限時將自動輪替。
                             </span>
                         </div>
                     </form>
@@ -370,11 +774,36 @@
     <div id="add-event-modal" class="modal-overlay hidden" onclick="closeAddEventModalOnOverlay(event)">
         <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h2>安排新行程</h2>
+                <h2><i class="fa-solid fa-calendar-plus" style="color: var(--primary-color);"></i> 安排新行程</h2>
                 <button class="btn-close" onclick="closeAddEventModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form id="event-form" onsubmit="handleCreateEvent(event)">
                 <div class="modal-body">
+                    <!-- AI Natural Language Input Area -->
+                    <div class="ai-modal-parse-box">
+                        <label for="modal-ai-input"><i class="fa-solid fa-wand-magic-sparkles" style="color: #6366f1;"></i> AI 智能自然語言 / 語音速記</label>
+                        <div class="ai-modal-input-row">
+                            <input type="text" id="modal-ai-input" placeholder="例如：「8月20日14:00到16:00跟張阿公家訪」" onkeydown="if(event.key==='Enter'){event.preventDefault(); parseModalAIInput();}">
+                            <button type="button" class="voice-mic-btn" id="modal-mic-btn" onclick="toggleVoiceInput('modal-ai-input', 'modal-mic-btn', parseModalAIInput)" title="點擊進行語音輸入">
+                                <i class="fa-solid fa-microphone"></i>
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-ai-parse" onclick="parseModalAIInput()" id="modal-ai-parse-btn">
+                                <i class="fa-solid fa-robot"></i> <span>AI 判讀填入</span>
+                            </button>
+                        </div>
+                        <div id="modal-ai-status" class="ai-parse-status hidden"></div>
+                    </div>
+
+                    <div class="quick-time-chips">
+                        <span class="chip-label">快捷時間：</span>
+                        <button type="button" class="time-chip" onclick="applyTimeChip('today-pm')">今天下午 (14:00-15:00)</button>
+                        <button type="button" class="time-chip" onclick="applyTimeChip('tomorrow-am')">明天上午 (09:00-10:00)</button>
+                        <button type="button" class="time-chip" onclick="applyTimeChip('tomorrow-pm')">明天下午 (14:00-15:00)</button>
+                        <button type="button" class="time-chip" onclick="applyTimeChip('next-mon-am')">下週一 (09:00-10:00)</button>
+                    </div>
+
+                    <hr class="modal-divider">
+
                     <div class="input-group">
                         <label for="event-summary"><i class="fa-solid fa-heading"></i> 行程名稱</label>
                         <input type="text" id="event-summary" required placeholder="例如：與客戶召開會議" autocomplete="off">
@@ -398,9 +827,72 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeAddEventModal()">取消</button>
-                    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calendar-check"></i> 建立行程</button>
+                    <button type="submit" class="btn btn-primary" id="create-event-submit-btn"><i class="fa-solid fa-calendar-check"></i> 建立行程</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 5. CASE SELECTOR MODAL -->
+    <div id="case-selector-modal" class="modal-overlay hidden" onclick="closeCaseSelectorModalOnOverlay(event)">
+        <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-folder-open"></i> 選擇並載入個案資料</h2>
+                <button class="btn-close" onclick="closeCaseSelectorModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 12px;">系統中已累積的個案備份檔案：</p>
+                <div id="case-selector-list" class="services-chip-grid" style="max-height: 300px; overflow-y: auto;">
+                    <!-- Dynamic case chips -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCaseSelectorModal()">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SYSTEM UPDATE MODAL -->
+    <div id="update-modal" class="modal-overlay hidden" onclick="closeUpdateModal()">
+        <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-cloud-arrow-down"></i> 軟體線上檢查與更新</h2>
+                <button class="btn-close" onclick="closeUpdateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <div id="update-status-content" style="padding: 10px 0;">
+                    <p><i class="fa-solid fa-spinner fa-spin"></i> 正在連線至雲端檢查最新版本...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="update-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">關閉</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAN RESULT MODAL -->
+    <div id="plan-result-modal" class="modal-overlay hidden" onclick="closePlanResultModal()">
+        <div class="modal-card event-modal-card" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-file-circle-check"></i> 照顧計畫書產出成功！</h2>
+                <button class="btn-close" onclick="closePlanResultModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 20px 10px;">
+                <p style="font-size: 15px; margin-bottom: 20px; color: var(--text-secondary);">
+                    個案照顧計畫書已完成產出與費用試算，請選擇以下方式進行存取：
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 12px; max-width: 320px; margin: 0 auto;">
+                    <a id="modal-download-word-btn" href="#" target="_blank" class="btn btn-primary btn-block" style="padding: 12px; font-size: 15px;">
+                        <i class="fa-solid fa-file-word"></i> ⬇️ 下載 Word 檔 (.doc)
+                    </a>
+                    <a id="modal-open-drive-btn" href="#" target="_blank" class="btn btn-success btn-block" style="padding: 12px; font-size: 15px; background-color: #0f9d58; border-color: #0f9d58; color: #ffffff;">
+                        <i class="fa-brands fa-google-drive"></i> ☁️ 開啟 Google 雲端硬碟 (線上直接修改內容)
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closePlanResultModal()">關閉視窗</button>
+            </div>
         </div>
     </div>
 
@@ -410,6 +902,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=21.0"></script>
+    <script src="/app.js?v=35.0"></script>
 </body>
 </html>

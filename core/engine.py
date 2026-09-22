@@ -157,11 +157,18 @@ def generate_plan(state):
     familyRel = state.get('familyRel', 'ＯＯ')
     
     try:
-        age_num = datetime.datetime.now().year - int(birthYear)
-        roc_year = int(birthYear) - 1911
+        b_year_int = int(str(birthYear).replace("年次", "").replace("年", "").strip())
+        if b_year_int < 1900:
+            roc_year = b_year_int
+            western_year = 1911 + b_year_int
+        else:
+            western_year = b_year_int
+            roc_year = b_year_int - 1911
+            
+        age_num = datetime.datetime.now().year - western_year
         age = str(age_num)
         rocYear = str(roc_year)
-    except:
+    except Exception:
         age = 'Ｏ'
         rocYear = 'ＯＯ'
 
@@ -301,6 +308,14 @@ def generate_plan(state):
     delta_analysis_text = ""
     if name and name != "未提供資料":
         try:
+            try:
+                import database
+            except ImportError:
+                import sys
+                parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if parent_dir not in sys.path:
+                    sys.path.append(parent_dir)
+                import database
             database.update_case_record(
                 name=name,
                 last_visit_date=state.get("visitDate"),
@@ -320,8 +335,6 @@ def generate_plan(state):
                 delta_info = analyze_case_delta_with_ai(prev_plan_text, state)
                 if not lastProblemList and delta_info.get("last_problems"):
                     lastProblemList = delta_info["last_problems"]
-                if delta_info.get("delta_analysis"):
-                    delta_analysis_text = f"\n\n====================\n🔍 【前後次紀錄 AI 差異比對與問題點分析】\n{delta_info['delta_analysis']}\n===================="
         except Exception as de_err:
             print(f"Error fetching/analyzing case history from Drive: {de_err}")
 
@@ -490,7 +503,7 @@ IADLs: {iadlVal}
 二、家訪日期: {visitDateRoc} 
 三、偕同訪視者: 個管師-湯育維、家屬-{familyName}、個案-{name}
 四、個案狀況: 
-(一)身心概況：個案為{age}歲({rocYear}年次){gender}性，意識{consciousness}，{interaction}; 對於人事時地物{orientation}; 視力{vision}; 聽力{hearing}; {recentFalls}跌倒及住院紀錄; 情緒{emotion}; 疾病史：{condStr}。
+(一)身心概況：個案為{age}歲({rocYear}年次){gender}性，意識{consciousness}，{interaction}; 對於人事時地物{orientation}; 視力{vision}; 聽力{hearing}; {recentFalls}跌倒及住院紀錄; 情緒{emotion}; 疾病與手術史：{condStr}。
 管路與特殊照護：{tubesStr}
 認知與行為狀態：{cogStr}
 跌倒紀錄(過去一年)：{fallStr}
@@ -545,7 +558,7 @@ IADLs: {iadlVal}
 
     return {
         "feeStr": feeStr.replace("\\n", "\n"),
-        "planText": (planText + delta_analysis_text).replace("\\n", "\n"),
+        "planText": planText.replace("\\n", "\n"),
         "isError": False
     }
 

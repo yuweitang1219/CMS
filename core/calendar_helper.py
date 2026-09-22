@@ -309,6 +309,7 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     plan_type_map = {
         "AA01": "AA01家訪擬定照顧計畫",
         "ReEval": "單位複評計畫擬定",
+        "ChuZhun": "出準家訪擬定照顧計畫",
         "CoVisit": "共訪",
         "NewCase": "新案",
         "PreNewCase": "出準新案",
@@ -438,6 +439,7 @@ def sync_to_calendar(state, override_start_address=None, override_source_name=No
     brief_type_map = {
         "AA01": "AA01",
         "ReEval": "複評",
+        "ChuZhun": "出準",
         "CoVisit": "共訪",
         "NewCase": "新案",
         "PreNewCase": "準新案",

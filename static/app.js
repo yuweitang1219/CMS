@@ -1,4 +1,16 @@
 // Global State
+function getApiUrl(path) {
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+        return path;
+    }
+    let origin = window.location.origin;
+    if (!origin || origin === "null" || origin.startsWith("file:")) {
+        origin = "http://127.0.0.1:8000";
+    }
+    return origin + (path.startsWith("/") ? path : "/" + path);
+}
+
 let state = {
     hasUsers: false,
     loggedIn: false,
@@ -19,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateWeather();
     setInterval(updateWeather, 900000); // Update every 15 minutes
     initClockCollapseState();
+    initChatbotApp();
     
     // Instantly sync data when the user focuses the tab or wakes up the tablet screen
     window.addEventListener("focus", () => {
@@ -113,62 +126,32 @@ async function updateWeather() {
 // --- AUTHENTICATION ---
 
 async function checkAuthStatus() {
-    try {
-        const response = await fetch("/api/auth/status");
-        const data = await response.json();
-        
-        state.hasUsers = data.has_users;
-        state.loggedIn = data.logged_in;
-        state.username = data.username || "";
-        
-        const loginView = document.getElementById("login-view");
-        const dashboardView = document.getElementById("dashboard-view");
-        
-        if (!state.loggedIn) {
-            loginView.classList.remove("hidden");
-            dashboardView.classList.add("hidden");
-            
-            // Adjust form for Register vs Login
-            const title = document.getElementById("auth-title");
-            const subtitle = document.getElementById("auth-subtitle");
-            const btnText = document.querySelector("#auth-submit-btn span");
-            
-            if (!state.hasUsers) {
-                title.textContent = "初始化管理員帳號";
-                subtitle.textContent = "這是系統第一次啟動，請設定一組主管理員帳密以保護您的資料。";
-                btnText.textContent = "建立帳密並登入";
-            } else {
-                title.textContent = "登入儀表板";
-                subtitle.textContent = "請輸入密碼以進入您的個人生活儀表板。";
-                btnText.textContent = "登入";
-            }
-        } else {
-            loginView.classList.add("hidden");
-            dashboardView.classList.remove("hidden");
-            const userDisplayNameEl = document.getElementById("user-display-name");
-            if (userDisplayNameEl) {
-                userDisplayNameEl.textContent = state.username;
-            }
-            
-            // Render default calendar structure immediately to prevent blank UI while fetching
-            renderMiniCalendar();
-            
-            // Initial data fetch
-            await loadSettings();
-            await fetchTodos();
-            await fetchEvents();
-            
-            // Start background sync every 4 seconds for real-time updates (prevents lagging on tablets)
-            if (state.syncInterval) clearInterval(state.syncInterval);
-            state.syncInterval = setInterval(() => {
-                fetchTodos(false); // fetch silently without resetting UI state
-                fetchEvents(false);
-            }, 4000);
-        }
-    } catch (error) {
-        console.error("Auth check failed:", error);
-        showToast("無法連接至伺服器。");
+    state.hasUsers = true;
+    state.loggedIn = true;
+    state.username = "yuwei1112";
+    
+    const loginView = document.getElementById("login-view");
+    const dashboardView = document.getElementById("dashboard-view");
+    
+    if (loginView) loginView.classList.add("hidden");
+    if (dashboardView) dashboardView.classList.remove("hidden");
+    
+    const userDisplayNameEl = document.getElementById("user-display-name");
+    if (userDisplayNameEl) {
+        userDisplayNameEl.textContent = state.username;
     }
+    
+    renderMiniCalendar();
+    await loadSettings();
+    await fetchTodos();
+    await fetchEvents();
+    
+    // Start background sync every 10 seconds for real-time updates without flickering
+    if (state.syncInterval) clearInterval(state.syncInterval);
+    state.syncInterval = setInterval(() => {
+        fetchTodos(false); // fetch silently without resetting UI state
+        fetchEvents(false);
+    }, 10000);
 }
 
 async function handleAuthSubmit(event) {
@@ -406,19 +389,6 @@ async function fetchEvents(showLoading = true) {
         const response = await fetch("/api/calendar/events");
         const status = response.status;
         const text = await response.text();
-        
-        // Report HTTP Response for debugging
-        fetch('/api/debug/js-error', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: `DEBUG: fetchEvents HTTP status = ${status}. response length = ${text.length}`,
-                source: 'fetchEvents',
-                lineno: 0,
-                colno: 0,
-                stack: text.slice(0, 300)
-            })
-        }).catch(() => {});
 
         if (status === 401) {
             checkAuthStatus();
@@ -492,6 +462,7 @@ function formatEventSummaryForCell(summary) {
             else if (inside.includes("複評") || inside.includes("ReEval")) type = "複評";
             else if (inside.includes("共訪") || inside.includes("CoVisit")) type = "共訪";
             else if (inside.includes("新案") || inside.includes("NewCase")) type = "新案";
+            else if (inside.includes("出準") || inside.includes("ChuZhun")) type = "出準";
             else if (inside.includes("準新案") || inside.includes("PreNewCase")) type = "準新案";
             else if (inside.includes("計畫異動") || inside.includes("PlanChange")) type = "異動";
             else type = inside.split(" ")[0].trim();
@@ -580,6 +551,13 @@ function renderMiniCalendar() {
             if (thisDate.toDateString() === state.selectedDate.toDateString()) {
                 dayDiv.classList.add("selected");
             }
+            
+            dayDiv.onclick = () => {
+                state.selectedDate = thisDate;
+                renderMiniCalendar();
+                renderEvents();
+                openInlineCardForDate(thisDate);
+            };
             
             // Day number header
             const dayNumSpan = document.createElement("span");
@@ -833,12 +811,525 @@ function openAddEventModal() {
 function closeAddEventModal() {
     document.getElementById("add-event-modal").classList.add("hidden");
     document.getElementById("event-form").reset();
+    const modalInput = document.getElementById("modal-ai-input");
+    if (modalInput) modalInput.value = "";
+    const modalStatus = document.getElementById("modal-ai-status");
+    if (modalStatus) {
+        modalStatus.classList.add("hidden");
+        modalStatus.innerHTML = "";
+    }
 }
 
 function closeAddEventModalOnOverlay(event) {
     if (event.target === document.getElementById("add-event-modal")) {
         closeAddEventModal();
     }
+}
+
+// --- AI NATURAL LANGUAGE CALENDAR PARSER & VOICE RECOGNITION ---
+
+let currentRecognition = null;
+let currentListeningBtnId = null;
+
+function toggleVoiceInput(inputId, micBtnId, onCompleteCallback) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showToast("您的瀏覽器尚不支援原生語音辨識，請使用 Chrome/Edge 瀏覽器或直接打字。");
+        return;
+    }
+
+    const inputElem = document.getElementById(inputId);
+    const btnElem = document.getElementById(micBtnId);
+    if (!inputElem || !btnElem) return;
+
+    if (currentRecognition && currentListeningBtnId === micBtnId) {
+        try {
+            currentRecognition.stop();
+        } catch (e) {}
+        currentRecognition = null;
+        currentListeningBtnId = null;
+        btnElem.classList.remove("recording");
+        showToast("已停止語音辨識");
+        return;
+    }
+
+    if (currentRecognition) {
+        try { currentRecognition.stop(); } catch(e) {}
+        if (currentListeningBtnId) {
+            const oldBtn = document.getElementById(currentListeningBtnId);
+            if (oldBtn) oldBtn.classList.remove("recording");
+        }
+    }
+
+    try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'zh-TW';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+
+        currentRecognition = recognition;
+        currentListeningBtnId = micBtnId;
+        btnElem.classList.add("recording");
+        showToast("🎤 請開始說話（例：「8月20號下午2點到4點個案訪視」）...");
+
+        recognition.onresult = (event) => {
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            if (transcript) {
+                inputElem.value = transcript;
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech recognition error:", event.error);
+            btnElem.classList.remove("recording");
+            currentRecognition = null;
+            currentListeningBtnId = null;
+            if (event.error !== 'no-speech') {
+                showToast("語音辨識發生錯誤：" + event.error);
+            }
+        };
+
+        recognition.onend = () => {
+            btnElem.classList.remove("recording");
+            currentRecognition = null;
+            currentListeningBtnId = null;
+            if (inputElem.value.trim() && typeof onCompleteCallback === 'function') {
+                onCompleteCallback();
+            }
+        };
+
+        recognition.start();
+    } catch (err) {
+        console.error("Failed to start speech recognition:", err);
+        btnElem.classList.remove("recording");
+        showToast("無法開啟語音功能：" + err.message);
+    }
+}
+
+async function fetchEvents(showLoading = true) {
+    const disconnectedEl = document.getElementById("calendar-disconnected-state");
+    const connectedEl = document.getElementById("calendar-connected-state");
+    
+    try {
+        const response = await fetch("/api/calendar/events");
+        const status = response.status;
+        const text = await response.text();
+
+        if (status === 401) {
+            checkAuthStatus();
+            return;
+        }
+        
+        const data = JSON.parse(text);
+        const newEvents = data.items || data.events || [];
+
+        if (data.error === "not_authorized" || data.error === "unauthorized_by_google") {
+            updateGoogleBadge(false);
+            if (newEvents.length > 0) {
+                if (disconnectedEl) disconnectedEl.classList.add("hidden");
+                if (connectedEl) connectedEl.classList.remove("hidden");
+            } else {
+                if (disconnectedEl) disconnectedEl.classList.remove("hidden");
+                if (connectedEl) connectedEl.classList.add("hidden");
+            }
+        } else {
+            if (disconnectedEl) disconnectedEl.classList.add("hidden");
+            if (connectedEl) connectedEl.classList.remove("hidden");
+            updateGoogleBadge(true);
+        }
+
+        if (!areEventsEqual(state.events, newEvents)) {
+            state.events = newEvents;
+            renderMiniCalendar();
+            renderEvents();
+        }
+    } catch (error) {
+        console.error("Failed to fetch calendar events:", error);
+    }
+}
+
+async function parseCalendarTextAPI(text) {
+    const response = await fetch("/api/calendar/parse-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            text: text,
+            client_now: new Date().toISOString()
+        })
+    });
+    if (!response.ok) {
+        throw new Error("API call failed");
+    }
+    return await response.json();
+}
+
+let currentInlineParsedEvents = [];
+let liveParseTimer = null;
+
+function closeInlineSmartCard() {
+    const card = document.getElementById("inline-smart-schedule-card");
+    if (card) card.classList.add("hidden");
+}
+
+function openInlineCardForDate(targetDate) {
+    const card = document.getElementById("inline-smart-schedule-card");
+    if (!card) return;
+    
+    card.classList.remove("hidden");
+    const summaryInput = document.getElementById("inline-event-summary");
+    const startInput = document.getElementById("inline-event-start");
+    const endInput = document.getElementById("inline-event-end");
+    
+    if (summaryInput && (!summaryInput.value || summaryInput.value === "未命名行程")) {
+        summaryInput.value = "個案訪視";
+    }
+    
+    const y = targetDate.getFullYear();
+    const m = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const d = String(targetDate.getDate()).padStart(2, '0');
+    
+    if (startInput) startInput.value = `${y}-${m}-${d}T14:00`;
+    if (endInput) endInput.value = `${y}-${m}-${d}T15:00`;
+    
+    currentInlineParsedEvents = [{
+        summary: summaryInput ? summaryInput.value : "個案訪視",
+        start_time: `${y}-${m}-${d}T14:00:00`,
+        end_time: `${y}-${m}-${d}T15:00:00`
+    }];
+}
+
+function handleAIInputLive(val) {
+    if (!val || val.trim().length < 3) return;
+    if (liveParseTimer) clearTimeout(liveParseTimer);
+    
+    liveParseTimer = setTimeout(async () => {
+        try {
+            const parsedData = await parseCalendarTextAPI(val.trim());
+            const eventsList = parsedData.events || [parsedData];
+            if (eventsList.length > 0) {
+                currentInlineParsedEvents = eventsList;
+                const card = document.getElementById("inline-smart-schedule-card");
+                if (card) card.classList.remove("hidden");
+                
+                const firstEv = eventsList[0] || {};
+                const summaryInput = document.getElementById("inline-event-summary");
+                const startInput = document.getElementById("inline-event-start");
+                const endInput = document.getElementById("inline-event-end");
+                
+                if (summaryInput) summaryInput.value = firstEv.summary || "行程";
+                if (startInput && firstEv.start_time) startInput.value = firstEv.start_time.substring(0, 16);
+                if (endInput && firstEv.end_time) endInput.value = firstEv.end_time.substring(0, 16);
+            }
+        } catch (e) {}
+    }, 800);
+}
+
+async function submitDashboardAIEvent() {
+    const inputElem = document.getElementById("dashboard-ai-event-input");
+    const statusElem = document.getElementById("dashboard-ai-event-status");
+    const submitBtn = document.getElementById("dashboard-ai-submit-btn");
+    const card = document.getElementById("inline-smart-schedule-card");
+    if (!inputElem) return;
+
+    const text = inputElem.value.trim();
+    if (!text) {
+        showToast("請先輸入或語音說出要新增的行程內容！");
+        inputElem.focus();
+        return;
+    }
+
+    if (statusElem) {
+        statusElem.classList.remove("hidden");
+        statusElem.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 智控解析中...`;
+    }
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+        const parsedData = await parseCalendarTextAPI(text);
+        const eventsList = parsedData.events || [parsedData];
+        currentInlineParsedEvents = eventsList;
+
+        if (card) card.classList.remove("hidden");
+
+        const firstEv = eventsList[0] || {};
+        const summaryInput = document.getElementById("inline-event-summary");
+        const startInput = document.getElementById("inline-event-start");
+        const endInput = document.getElementById("inline-event-end");
+        const batchContainer = document.getElementById("inline-batch-preview");
+
+        if (summaryInput) summaryInput.value = firstEv.summary || "行程";
+        if (startInput && firstEv.start_time) startInput.value = firstEv.start_time.substring(0, 16);
+        if (endInput && firstEv.end_time) endInput.value = firstEv.end_time.substring(0, 16);
+
+        if (batchContainer) {
+            if (eventsList.length > 1) {
+                batchContainer.classList.remove("hidden");
+                let batchHtml = `<div style="font-size:0.8rem; font-weight:600; color:#4f46e5; margin-bottom:4px;">✨ 已自動分拆 ${eventsList.length} 筆獨立行程：</div><ul style="margin:0; padding-left:18px; font-size:0.78rem;">`;
+                eventsList.forEach(ev => {
+                    const s = ev.start_time ? ev.start_time.replace('T', ' ').substring(0, 16) : '';
+                    batchHtml += `<li><strong>${ev.summary}</strong> (${s})</li>`;
+                });
+                batchHtml += `</ul>`;
+                batchContainer.innerHTML = batchHtml;
+            } else {
+                batchContainer.classList.add("hidden");
+                batchContainer.innerHTML = "";
+            }
+        }
+
+        if (statusElem) {
+            statusElem.innerHTML = `<span style="color:#10b981;"><i class="fa-solid fa-circle-check"></i> 解析完成！請於下方卡片核對後建立。</span>`;
+        }
+        showToast("✨ 已開啟即時智控卡片，請核對後建立！");
+    } catch (err) {
+        console.error("Dashboard AI event error:", err);
+        showToast("AI 判讀失敗，請確認網路與金鑰。");
+        if (statusElem) {
+            statusElem.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark"></i> 解析失敗</span>`;
+        }
+    } finally {
+        if (submitBtn) submitBtn.disabled = false;
+    }
+}
+
+async function confirmSaveInlineSmartCard() {
+    const card = document.getElementById("inline-smart-schedule-card");
+    const summaryInput = document.getElementById("inline-event-summary");
+    const startInput = document.getElementById("inline-event-start");
+    const endInput = document.getElementById("inline-event-end");
+    const confirmBtn = document.getElementById("inline-confirm-submit-btn");
+
+    let eventsToSave = [];
+    if (currentInlineParsedEvents.length > 1) {
+        eventsToSave = currentInlineParsedEvents;
+    } else {
+        const sVal = summaryInput ? summaryInput.value.trim() : "行程";
+        const stVal = startInput ? startInput.value : "";
+        const etVal = endInput ? endInput.value : "";
+
+        if (!stVal) {
+            showToast("請選擇開始時間！");
+            return;
+        }
+        eventsToSave = [{
+            summary: sVal || "行程",
+            start_time: stVal.length === 16 ? stVal + ":00" : stVal,
+            end_time: etVal.length === 16 ? etVal + ":00" : (etVal || stVal + ":00")
+        }];
+    }
+
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    try {
+        const payload = { events: eventsToSave };
+        const createRes = await fetch("/api/calendar/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (createRes.ok) {
+            const resData = await createRes.json();
+            const count = resData.count || eventsToSave.length;
+            showToast(`✨ 成功將 ${count} 筆行程寫入 Google 日曆與本機！`);
+            
+            const inputElem = document.getElementById("dashboard-ai-event-input");
+            if (inputElem) inputElem.value = "";
+            const statusElem = document.getElementById("dashboard-ai-event-status");
+            if (statusElem) statusElem.classList.add("hidden");
+            
+            closeInlineSmartCard();
+            fetchEvents();
+        } else {
+            const errText = await createRes.text();
+            showToast(`建立失敗：${errText}`);
+        }
+    } catch (err) {
+        console.error("Save inline smart card error:", err);
+        showToast("寫入日曆失敗，請重試。");
+    } finally {
+        if (confirmBtn) confirmBtn.disabled = false;
+    }
+}
+
+function applyInlineTimeChip(chipType) {
+    const startInput = document.getElementById("inline-event-start");
+    const endInput = document.getElementById("inline-event-end");
+    if (!startInput || !endInput) return;
+
+    const startDt = new Date();
+    const endDt = new Date();
+
+    if (chipType === 'today-pm') {
+        startDt.setHours(14, 0, 0, 0);
+        endDt.setHours(15, 0, 0, 0);
+    } else if (chipType === 'tomorrow-am') {
+        startDt.setDate(startDt.getDate() + 1);
+        startDt.setHours(9, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + 1);
+        endDt.setHours(10, 0, 0, 0);
+    } else if (chipType === 'tomorrow-pm') {
+        startDt.setDate(startDt.getDate() + 1);
+        startDt.setHours(14, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + 1);
+        endDt.setHours(15, 0, 0, 0);
+    } else if (chipType === 'next-mon-am') {
+        const day = startDt.getDay();
+        const diff = (day === 0 ? 1 : 8 - day);
+        startDt.setDate(startDt.getDate() + diff);
+        startDt.setHours(9, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + diff);
+        endDt.setHours(10, 0, 0, 0);
+    }
+
+    const formatDt = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${day}T${hh}:${mm}`;
+    };
+
+    startInput.value = formatDt(startDt);
+    endInput.value = formatDt(endDt);
+    showToast("已更新時間！");
+}
+
+async function parseModalAIInput() {
+    const inputElem = document.getElementById("modal-ai-input");
+    const statusElem = document.getElementById("modal-ai-status");
+    const parseBtn = document.getElementById("modal-ai-parse-btn");
+    if (!inputElem) return;
+
+    const text = inputElem.value.trim();
+    if (!text) {
+        showToast("請輸入欲解析的行程敘述（如「8/20到8/22每天下午2點開會」）");
+        inputElem.focus();
+        return;
+    }
+
+    if (statusElem) {
+        statusElem.classList.remove("hidden");
+        statusElem.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> AI 判讀拆分中...`;
+    }
+    if (parseBtn) parseBtn.disabled = true;
+
+    try {
+        const parsed = await parseCalendarTextAPI(text);
+        const eventsList = parsed.events || [parsed];
+        const firstEv = eventsList[0];
+
+        document.getElementById("event-summary").value = firstEv.summary || "";
+        if (firstEv.description) {
+            document.getElementById("event-description").value = firstEv.description;
+        }
+        if (firstEv.start_time) {
+            document.getElementById("event-start").value = firstEv.start_time.substring(0, 16);
+        }
+        if (firstEv.end_time) {
+            document.getElementById("event-end").value = firstEv.end_time.substring(0, 16);
+        }
+
+        if (statusElem) {
+            if (eventsList.length > 1) {
+                statusElem.innerHTML = `
+                    <div class="ai-parse-success-badge">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>已自動拆分為 <strong>${eventsList.length} 筆行程</strong>！點擊儲存將一次全數建立。</span>
+                    </div>
+                `;
+            } else {
+                const sDate = firstEv.start_time.split("T")[0];
+                const sTime = firstEv.start_time.split("T")[1].substring(0, 5);
+                const eTime = firstEv.end_time.split("T")[1].substring(0, 5);
+                statusElem.innerHTML = `
+                    <div class="ai-parse-success-badge">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>已自動填入：<strong>${firstEv.summary}</strong> (${sDate} ${sTime} ~ ${eTime})</span>
+                    </div>
+                `;
+            }
+        }
+        showToast(`AI 判讀成功！已解析 ${eventsList.length} 筆行程。`);
+    } catch (err) {
+        console.error("Modal AI parse error:", err);
+        showToast("AI 解析失敗，請確認輸入內容。");
+        if (statusElem) {
+            statusElem.innerHTML = `<span style="color:#ef4444;"><i class="fa-solid fa-circle-xmark"></i> 解析失敗</span>`;
+        }
+    } finally {
+        if (parseBtn) parseBtn.disabled = false;
+    }
+}
+
+function openAddEventModalWithParsed(parsed) {
+    openAddEventModal();
+    if (parsed) {
+        const eventsList = parsed.events || [parsed];
+        const firstEv = eventsList[0];
+        if (firstEv.summary) document.getElementById("event-summary").value = firstEv.summary;
+        if (firstEv.description) document.getElementById("event-description").value = firstEv.description;
+        if (firstEv.start_time) document.getElementById("event-start").value = firstEv.start_time.substring(0, 16);
+        if (firstEv.end_time) document.getElementById("event-end").value = firstEv.end_time.substring(0, 16);
+        
+        const statusElem = document.getElementById("modal-ai-status");
+        if (statusElem && parsed.summary) {
+            statusElem.classList.remove("hidden");
+            const sDate = parsed.start_time.split("T")[0];
+            const sTime = parsed.start_time.split("T")[1].substring(0, 5);
+            const eTime = parsed.end_time.split("T")[1].substring(0, 5);
+            statusElem.innerHTML = `
+                <div class="ai-parse-success-badge">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>已自動填入：<strong>${parsed.summary}</strong> (${sDate} ${sTime} ~ ${eTime})</span>
+                </div>
+            `;
+        }
+    }
+}
+
+function applyTimeChip(chipType) {
+    const startDt = new Date();
+    const endDt = new Date();
+
+    if (chipType === 'today-pm') {
+        startDt.setHours(14, 0, 0, 0);
+        endDt.setHours(15, 0, 0, 0);
+    } else if (chipType === 'tomorrow-am') {
+        startDt.setDate(startDt.getDate() + 1);
+        startDt.setHours(9, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + 1);
+        endDt.setHours(10, 0, 0, 0);
+    } else if (chipType === 'tomorrow-pm') {
+        startDt.setDate(startDt.getDate() + 1);
+        startDt.setHours(14, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + 1);
+        endDt.setHours(15, 0, 0, 0);
+    } else if (chipType === 'next-mon-am') {
+        const day = startDt.getDay();
+        const diff = (day === 0 ? 1 : 8 - day);
+        startDt.setDate(startDt.getDate() + diff);
+        startDt.setHours(9, 0, 0, 0);
+        endDt.setDate(endDt.getDate() + diff);
+        endDt.setHours(10, 0, 0, 0);
+    }
+
+    const formatISO = (dt) => {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        const h = String(dt.getHours()).padStart(2, '0');
+        const min = String(dt.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${d}T${h}:${min}`;
+    };
+
+    document.getElementById("event-start").value = formatISO(startDt);
+    document.getElementById("event-end").value = formatISO(endDt);
+    showToast("已帶入快捷時間");
 }
 
 async function handleCreateEvent(event) {
@@ -894,44 +1385,66 @@ async function loadSettings() {
             state.settings = data;
             
             // Populating Google Settings Form & Status
-            document.getElementById("google-client-id").value = data.google.client_id || "";
-            document.getElementById("google-calendar-id").value = data.google.calendar_id || "primary";
-            document.getElementById("google-drive-folder-id").value = data.google.drive_folder_id || "";
-            document.getElementById("google-service-account-json").value = data.google.service_account_json || "";
-            document.getElementById("google-starting-address").value = data.google.starting_address || "";
+            const gClientId = document.getElementById("google-client-id");
+            if (gClientId) gClientId.value = data.google.client_id || "";
+            const gCalId = document.getElementById("google-calendar-id");
+            if (gCalId) gCalId.value = data.google.calendar_id || "primary";
+            const gDriveId = document.getElementById("google-drive-folder-id");
+            if (gDriveId) gDriveId.value = data.google.drive_folder_id || "";
+            const gSaJson = document.getElementById("google-service-account-json");
+            if (gSaJson) gSaJson.value = data.google.service_account_json || "";
+            const gStartAddr = document.getElementById("google-starting-address");
+            if (gStartAddr) gStartAddr.value = data.google.starting_address || "";
             const gConnectedEl = document.getElementById("google-status-connected");
             const gDisconnectedEl = document.getElementById("google-status-disconnected");
             
             if (data.google.connected) {
-                gConnectedEl.classList.remove("hidden");
-                gDisconnectedEl.classList.add("hidden");
-                document.getElementById("google-user-email").textContent = data.google.email || "已連結帳號";
+                if (gConnectedEl) gConnectedEl.classList.remove("hidden");
+                if (gDisconnectedEl) gDisconnectedEl.classList.add("hidden");
+                const emailEl = document.getElementById("google-user-email");
+                if (emailEl) emailEl.textContent = data.google.email || "已連結帳號";
                 updateGoogleBadge(true);
             } else {
-                gConnectedEl.classList.add("hidden");
-                gDisconnectedEl.classList.remove("hidden");
+                if (gConnectedEl) gConnectedEl.classList.add("hidden");
+                if (gDisconnectedEl) gDisconnectedEl.classList.remove("hidden");
                 updateGoogleBadge(false);
             }
             
             // Populating Line Webhook & Settings Form & Status
-            document.getElementById("line-webhook-url").value = data.line.webhook_url;
-            document.getElementById("line-user-id").value = data.line.authorized_user_id || "";
-            document.getElementById("gemini-api-key").value = data.line.gemini_api_key || "";
+            const lineWebhookEl = document.getElementById("line-webhook-url");
+            if (lineWebhookEl) lineWebhookEl.value = data.line.webhook_url;
+            const lineUserIdEl = document.getElementById("line-user-id");
+            if (lineUserIdEl) lineUserIdEl.value = data.line.authorized_user_id || "";
+            
+            const geminiInput = document.getElementById("gemini-api-key");
+            const geminiHint = document.getElementById("gemini-key-hint");
+            if (geminiInput) {
+                geminiInput.value = data.line.gemini_api_key || "";
+            }
+            if (geminiHint) {
+                const currentKey = (data.line.gemini_api_key || "").trim();
+                if (currentKey) {
+                    const masked = currentKey.length > 10 ? (currentKey.substring(0, 6) + "..." + currentKey.substring(currentKey.length - 4)) : "已設定";
+                    geminiHint.textContent = `目前金鑰：${masked} (支援個案自然語言建檔、行程排定與照護計畫分析)`;
+                } else {
+                    geminiHint.textContent = "尚未設定 API 金鑰，請貼上以啟用 AI 智能解析模組";
+                }
+            }
             
             const lConnectedEl = document.getElementById("line-status-connected");
             const lDisconnectedEl = document.getElementById("line-status-disconnected");
             const lineBadge = document.getElementById("status-line");
             
             if (data.line.token_configured && data.line.secret_configured) {
-                lConnectedEl.classList.remove("hidden");
-                lDisconnectedEl.classList.add("hidden");
+                if (lConnectedEl) lConnectedEl.classList.remove("hidden");
+                if (lDisconnectedEl) lDisconnectedEl.classList.add("hidden");
                 if (lineBadge) {
                     lineBadge.className = "status-badge connected";
                     lineBadge.querySelector("span").textContent = "Line 遠端已啟用";
                 }
             } else {
-                lConnectedEl.classList.add("hidden");
-                lDisconnectedEl.classList.remove("hidden");
+                if (lConnectedEl) lConnectedEl.classList.add("hidden");
+                if (lDisconnectedEl) lDisconnectedEl.classList.remove("hidden");
                 if (lineBadge) {
                     lineBadge.className = "status-badge disconnected";
                     lineBadge.querySelector("span").textContent = "Line 遠端未啟用";
@@ -939,8 +1452,10 @@ async function loadSettings() {
             }
             
             // Dynamic Webhook details for setup instruction page
-            document.getElementById("local-ip-address").textContent = window.location.origin;
-            document.getElementById("google-redirect-uri-display").textContent = `${window.location.origin}/oauth2callback`;
+            const localIpEl = document.getElementById("local-ip-address");
+            if (localIpEl) localIpEl.textContent = window.location.origin;
+            const redirectUriEl = document.getElementById("google-redirect-uri-display");
+            if (redirectUriEl) redirectUriEl.textContent = `${window.location.origin}/oauth2callback`;
         }
     } catch (error) {
         console.error("Failed to load settings:", error);
@@ -1008,12 +1523,45 @@ async function handleSaveLineSettings(event) {
             // Clear inputs for security display
             document.getElementById("line-channel-token").value = "";
             document.getElementById("line-channel-secret").value = "";
-            document.getElementById("gemini-api-key").value = "";
         } else {
             showToast("儲存 Line 設定失敗。");
         }
     } catch (error) {
         showToast("網路錯誤。");
+    }
+}
+
+async function handleSaveGeminiKey(event) {
+    event.preventDefault();
+    const geminiKey = document.getElementById("gemini-api-key").value.trim();
+    if (!geminiKey) {
+        showToast("請輸入 Gemini API 金鑰！");
+        return;
+    }
+    
+    // Check if key is a valid format (Google now supports both new AQ. and legacy AIza keys)
+    const isNewFormat = geminiKey.startsWith("AQ.");
+    const isLegacyFormat = geminiKey.startsWith("AIza");
+    if (!isNewFormat && !isLegacyFormat && !geminiKey.includes(",")) {
+        if (!confirm("⚠️ 偵測到此金鑰格式通常不是 Google 官方 API Key (標準格式以 'AQ.' 或 'AIza' 開頭)。\n\n您確定要儲存此金鑰嗎？")) {
+            return;
+        }
+    }
+    
+    try {
+        const response = await fetch("/api/settings/gemini", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ gemini_api_key: geminiKey })
+        });
+        if (response.ok) {
+            showToast("✨ Gemini API 金鑰已成功儲存並生效！");
+            loadSettings();
+        } else {
+            showToast("儲存 Gemini API 金鑰失敗。");
+        }
+    } catch (error) {
+        showToast("網路連線錯誤。");
     }
 }
 
@@ -1212,4 +1760,1149 @@ function initClockCollapseState() {
     if (header) header.classList.remove("header-collapsed");
     const miniClock = document.getElementById("mini-calendar-clock");
     if (miniClock) miniClock.classList.add("hidden");
+}
+
+// ==========================================
+// Standalone Software & AI Chatbot Logic
+// ==========================================
+
+let currentActiveState = null;
+
+function initChatbotApp() {
+    initSidebarCaseSearch();
+    fetchChatSession();
+}
+
+function switchWorktab(tabName) {
+    const btnBuilder = document.getElementById("tab-btn-builder");
+    const btnAgenda = document.getElementById("tab-btn-agenda");
+    const paneBuilder = document.getElementById("pane-case-builder");
+    const paneAgenda = document.getElementById("pane-agenda");
+    
+    if (tabName === "builder") {
+        if (btnBuilder) btnBuilder.classList.add("active");
+        if (btnAgenda) btnAgenda.classList.remove("active");
+        if (paneBuilder) paneBuilder.classList.remove("hidden");
+        if (paneAgenda) paneAgenda.classList.add("hidden");
+    } else {
+        if (btnAgenda) btnAgenda.classList.add("active");
+        if (btnBuilder) btnBuilder.classList.remove("active");
+        if (paneAgenda) paneAgenda.classList.remove("hidden");
+        if (paneBuilder) paneBuilder.classList.add("hidden");
+    }
+}
+
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme") || (document.body && document.body.getAttribute("data-theme")) || "light";
+    const themeIcon = document.getElementById("theme-icon");
+    if (currentTheme === "dark") {
+        document.documentElement.setAttribute("data-theme", "light");
+        if (document.body) document.body.setAttribute("data-theme", "light");
+        if (themeIcon) themeIcon.className = "fa-solid fa-moon";
+        localStorage.setItem("app_theme", "light");
+    } else {
+        document.documentElement.setAttribute("data-theme", "dark");
+        if (document.body) document.body.setAttribute("data-theme", "dark");
+        if (themeIcon) themeIcon.className = "fa-solid fa-sun";
+        localStorage.setItem("app_theme", "dark");
+    }
+}
+
+// Restore saved theme on page load (Default to Light theme)
+const savedTheme = localStorage.getItem("app_theme") || "light";
+document.documentElement.setAttribute("data-theme", savedTheme);
+document.addEventListener("DOMContentLoaded", () => {
+    if (document.body) document.body.setAttribute("data-theme", savedTheme);
+    const themeIcon = document.getElementById("theme-icon");
+    if (themeIcon) themeIcon.className = savedTheme === "dark" ? "fa-solid fa-sun" : "fa-solid fa-moon";
+    
+    // Restore saved workstation sidebar collapse states
+    const wsContainer = document.querySelector(".workstation-container");
+    if (wsContainer) {
+        if (localStorage.getItem("ws_left_collapsed") === "1") {
+            wsContainer.classList.add("left-collapsed");
+        }
+        if (localStorage.getItem("ws_right_collapsed") === "1") {
+            wsContainer.classList.add("right-collapsed");
+            const headerBtn = document.getElementById("btn-toggle-ai-header");
+            if (headerBtn) {
+                const textSpan = headerBtn.querySelector(".ai-toggle-text");
+                if (textSpan) textSpan.textContent = "展開 AI";
+            }
+        }
+    }
+});
+
+async function fetchChatSession() {
+    try {
+        const res = await fetch(getApiUrl("/api/chat/session"));
+        if (res.ok) {
+            const data = await res.json();
+            if (data.state) {
+                updateFormFromState(data.state, true);
+                if (data.state._history && Array.isArray(data.state._history) && data.state._history.length > 0) {
+                    renderChatHistory(data.state._history);
+                }
+            }
+            loadSidebarResidentCards();
+        }
+    } catch (e) {
+        console.error("Failed to fetch chat session:", e);
+    }
+}
+
+function updateFormFromState(st, force = false) {
+    if (!st) return;
+    if (force || !currentActiveState) {
+        currentActiveState = st;
+    }
+    
+    // Update Badge & Top Metric Cards
+    const badgeText = document.getElementById("case-badge-text");
+    if (badgeText) {
+        const cName = st.name || "未提供資料";
+        const cmsLvl = st.cmsLvl ? ` | CMS ${st.cmsLvl}級` : "";
+        badgeText.textContent = `目前個案：${cName}${cmsLvl}`;
+    }
+    
+    const metricName = document.getElementById("metric-case-name");
+    const metricCms = document.getElementById("metric-cms-level");
+    const metricTraf = document.getElementById("metric-fee-estimate");
+    const metricDate = document.getElementById("metric-visit-date");
+    
+    if (metricName) metricName.textContent = st.name || "未加載個案";
+    if (metricCms) metricCms.textContent = st.cmsLvl ? `第 ${st.cmsLvl} 級` : "未設定";
+    if (metricTraf) metricTraf.textContent = (st.address && st.address.includes("中壢")) || String(st.trafLvl) === "2" ? "特定區 (2區)" : "一般區 (1區)";
+    if (metricDate) metricDate.textContent = st.visitDate || "未排定";
+    
+    // Helper to safely set value and trigger pulse glow
+    function setFieldVal(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        // DO NOT overwrite if user has already typed a value locally, unless forced
+        if (!force && el.value && el.value.trim() !== "") return;
+        
+        let newVal = (val !== null && val !== undefined && val !== "未提供資料") ? String(val).trim() : "";
+        
+        // Auto-convert 4-digit western year (e.g. 1948) to ROC year (e.g. 37)
+        if (id === "cb-birthYear" && newVal && !isNaN(newVal) && parseInt(newVal) > 1900) {
+            newVal = String(parseInt(newVal) - 1911);
+        }
+        
+        // Normalize for select dropdowns
+        if (el.tagName === "SELECT") {
+            if (id === "cb-planType") {
+                const map = { "複評": "ReEval", "AA01": "AA01", "出準": "ChuZhun", "新案": "NewCase", "共訪": "CoVisit", "異動": "PlanChange", "私人": "Private" };
+                for (let k in map) {
+                    if (newVal.includes(k) || newVal === map[k]) {
+                        newVal = map[k];
+                        break;
+                    }
+                }
+            } else if (id === "cb-statusVal") {
+                if (newVal.includes("一般") || newVal === "1" || newVal.includes("3")) newVal = "1";
+                else if (newVal.includes("中低") || newVal === "2") newVal = "2";
+                else if (newVal.includes("低收") || newVal === "3") newVal = "3";
+            } else if (id === "cb-hasF") {
+                newVal = (val === true || val === "true" || String(val).includes("是") || String(val).includes("有")) ? "true" : "false";
+            } else if (id === "cb-cmsLvl") {
+                const m = newVal.match(/\d/);
+                if (m) newVal = m[0];
+            } else if (id === "cb-trafLvl") {
+                const m = newVal.match(/\d/);
+                if (m) newVal = m[0];
+                else if (st.address && st.address.includes("中壢")) newVal = "2";
+            } else if (id === "cb-gender") {
+                newVal = newVal.includes("女") ? "女" : "男";
+            }
+            
+            // Check if newVal matches an option value; if not, try text matching
+            let matched = false;
+            for (let opt of el.options) {
+                if (opt.value === newVal) {
+                    el.value = newVal;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched && newVal) {
+                for (let opt of el.options) {
+                    if (opt.textContent.includes(newVal) || newVal.includes(opt.value)) {
+                        el.value = opt.value;
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+        } else {
+            el.value = newVal;
+        }
+        
+        el.classList.remove("field-highlight-glow");
+        void el.offsetWidth; // trigger reflow
+        el.classList.add("field-highlight-glow");
+    }
+    
+    setFieldVal("cb-name", st.name);
+    setFieldVal("cb-birthYear", st.birthYear);
+    setFieldVal("cb-gender", st.gender);
+    setFieldVal("cb-statusVal", st.statusVal);
+    setFieldVal("cb-visitDate", st.visitDate);
+    setFieldVal("cb-visitTime", st.visitTime);
+    setFieldVal("cb-address", st.address);
+    setFieldVal("cb-planType", st.planType);
+    setFieldVal("cb-cmsLvl", st.cmsLvl);
+    setFieldVal("cb-trafLvl", st.trafLvl);
+    setFieldVal("cb-hasF", String(st.hasF));
+    setFieldVal("cb-livingStr", st.livingStr);
+    setFieldVal("cb-burdenStr", st.burdenStr);
+    setFieldVal("cb-specialistName", st.specialistName);
+    
+    // Render modern interactive services & calculate real-time quotas
+    renderInteractiveServices();
+    updateQuotaDisplay();
+}
+
+// --- INTERACTIVE SERVICE CODES & REAL-TIME QUOTA CALCULATOR ---
+
+const LTC_SERVICES_DICT = {
+    "BA01": { desc: "基本身體清潔", price: 260, type: "BC" },
+    "BA02": { desc: "基本日常照顧", price: 195, type: "BC" },
+    "BA03": { desc: "測量生命徵象", price: 35, type: "BC" },
+    "BA04": { desc: "協助進食或管灌", price: 130, type: "BC" },
+    "BA05": { desc: "餐食照顧", price: 310, type: "BC" },
+    "BA07": { desc: "協助沐浴及洗頭", price: 325, type: "BC" },
+    "BA08": { desc: "足部照護", price: 500, type: "BC" },
+    "BA09": { desc: "到宅沐浴車第一型", price: 2200, type: "BC" },
+    "BA09a": { desc: "到宅沐浴車第二型", price: 2500, type: "BC" },
+    "BA10": { desc: "翻身拍背", price: 155, type: "BC" },
+    "BA11": { desc: "肢體關節活動", price: 195, type: "BC" },
+    "BA12": { desc: "協助上下樓梯", price: 130, type: "BC" },
+    "BA13": { desc: "陪同外出(每30分)", price: 195, type: "BC" },
+    "BA14": { desc: "陪同就醫(每趟)", price: 685, type: "BC" },
+    "BA15": { desc: "家務服務(每30分)", price: 195, type: "BC" },
+    "BA16": { desc: "代購代領代送", price: 130, type: "BC" },
+    "BA18": { desc: "安全看視(每30分)", price: 200, type: "BC" },
+    "BA20": { desc: "陪伴服務(每30分)", price: 175, type: "BC" },
+    "BA22": { desc: "巡視服務", price: 130, type: "BC" },
+    "BA23": { desc: "協助洗頭", price: 200, type: "BC" },
+    "BA24": { desc: "協助排泄", price: 220, type: "BC" },
+    "CA08": { desc: "個別化服務計畫", price: 1500, type: "BC" },
+    "CB01": { desc: "營養照護", price: 1500, type: "BC" },
+    "CB02": { desc: "進食與吞嚥照護", price: 1500, type: "BC" },
+    "CB03": { desc: "困擾行為照護", price: 1500, type: "BC" },
+    "CB04": { desc: "臥床受限照護", price: 1500, type: "BC" },
+    "CD02": { desc: "居家護理指導", price: 1500, type: "BC" },
+    "GA09": { desc: "居家喘息服務2小時", price: 770, type: "G" },
+    "GA03": { desc: "日照中心喘息全日", price: 1250, type: "G" },
+    "GA04": { desc: "日照中心喘息半日", price: 625, type: "G" },
+    "GA05": { desc: "機構住宿喘息全日", price: 2310, type: "G" }
+};
+
+const CMS_QUOTA_MAP = {
+    2: 10020, 3: 15460, 4: 18580, 5: 24100, 6: 28070, 7: 32090, 8: 36180
+};
+
+function updateQuotaDisplay() {
+    const st = currentActiveState || {};
+    const cmsLvl = parseInt(st.cmsLvl) || 0;
+    let maxBC = CMS_QUOTA_MAP[cmsLvl] || 0;
+    if (st.hasF) {
+        maxBC = Math.round(maxBC * 0.3);
+    }
+    
+    const activeSvcs = st.activeServices || [];
+    const serviceTimes = st.serviceTimes || {};
+    
+    let usedBC = 0;
+    for (const code of activeSvcs) {
+        const item = LTC_SERVICES_DICT[code];
+        if (item && item.type === "BC") {
+            const times = parseInt(serviceTimes[code]) || 1;
+            usedBC += item.price * times;
+        }
+    }
+    
+    const remainBC = maxBC - usedBC;
+    const statusVal = String(st.statusVal || "1");
+    let copayRate = 0.16;
+    if (statusVal === "2") copayRate = 0.05;
+    else if (statusVal === "3") copayRate = 0.00;
+    
+    const copayEst = Math.round(usedBC * copayRate);
+    
+    const elMax = document.getElementById("quota-max-bc");
+    const elUsed = document.getElementById("quota-used-bc");
+    const elRemain = document.getElementById("quota-remain-bc");
+    const elCopay = document.getElementById("quota-copay-est");
+    const elFill = document.getElementById("quota-progress-fill");
+    
+    if (elMax) elMax.textContent = `$${maxBC.toLocaleString()}`;
+    if (elUsed) elUsed.textContent = `$${usedBC.toLocaleString()}`;
+    if (elRemain) {
+        elRemain.textContent = `$${remainBC.toLocaleString()}`;
+        if (remainBC < 0) {
+            elRemain.className = "quota-stat-val danger";
+        } else {
+            elRemain.className = "quota-stat-val success";
+        }
+    }
+    if (elCopay) {
+        const ratePct = Math.round(copayRate * 100);
+        elCopay.textContent = `$${copayEst.toLocaleString()} (${ratePct}%)`;
+    }
+    
+    if (elFill) {
+        if (maxBC > 0) {
+            const pct = Math.min(100, Math.round((usedBC / maxBC) * 100));
+            elFill.style.width = `${pct}%`;
+            if (usedBC > maxBC) {
+                elFill.classList.add("over-budget");
+            } else {
+                elFill.classList.remove("over-budget");
+            }
+        } else {
+            elFill.style.width = "0%";
+        }
+    }
+    
+    // Also update Primary Action Dock
+    updatePrimaryActionDock(remainBC);
+}
+
+function renderInteractiveServices() {
+    const servicesContainer = document.getElementById("active-services-container");
+    if (!servicesContainer) return;
+    
+    const st = currentActiveState || {};
+    const activeSvcs = st.activeServices || [];
+    const serviceTimes = st.serviceTimes || {};
+    
+    if (activeSvcs.length === 0) {
+        servicesContainer.innerHTML = `
+            <span class="service-code-tag" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.2);">
+                <i class="fa-solid fa-circle-info"></i> 尚無配置服務代碼（可由右上方選單快速加入）
+            </span>
+        `;
+        return;
+    }
+    
+    servicesContainer.innerHTML = activeSvcs.map(code => {
+        const item = LTC_SERVICES_DICT[code] || { desc: "長照服務", price: 200 };
+        const times = serviceTimes[code] ? ` (${serviceTimes[code]}次)` : "";
+        return `
+            <span class="service-code-tag">
+                <i class="fa-solid fa-check"></i>
+                <span>${code} ${item.desc}${times}</span>
+                <button type="button" class="btn-tag-remove" onclick="removeServiceCode('${code}')" title="移除 ${code}">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </span>
+        `;
+    }).join("");
+}
+
+function removeServiceCode(code) {
+    if (!currentActiveState) return;
+    if (!currentActiveState.activeServices) currentActiveState.activeServices = [];
+    currentActiveState.activeServices = currentActiveState.activeServices.filter(c => c !== code);
+    if (currentActiveState.serviceTimes) {
+        delete currentActiveState.serviceTimes[code];
+    }
+    renderInteractiveServices();
+    updateQuotaDisplay();
+    showToast(`已移除服務代碼：${code}`);
+    syncStateToServerImmediate();
+}
+
+function handleAddServiceFromSelect(code) {
+    if (!code) return;
+    if (!currentActiveState) currentActiveState = {};
+    if (!currentActiveState.activeServices) currentActiveState.activeServices = [];
+    if (!currentActiveState.serviceTimes) currentActiveState.serviceTimes = {};
+    
+    if (currentActiveState.activeServices.includes(code)) {
+        showToast(`服務代碼 ${code} 已經在配置清單中！`);
+        return;
+    }
+    
+    currentActiveState.activeServices.push(code);
+    let defaultTimes = 12;
+    if (code === "BA14") defaultTimes = 2;
+    else if (code.startsWith("CA") || code.startsWith("CB") || code.startsWith("CD")) defaultTimes = 1;
+    else if (code.startsWith("GA")) defaultTimes = 2;
+    
+    currentActiveState.serviceTimes[code] = defaultTimes;
+    renderInteractiveServices();
+    updateQuotaDisplay();
+    showToast(`已成功新增服務代碼：${code}`);
+    syncStateToServerImmediate();
+}
+
+function adjustServiceTimes(code, delta) {
+    if (!currentActiveState) return;
+    if (!currentActiveState.serviceTimes) currentActiveState.serviceTimes = {};
+    const curr = parseInt(currentActiveState.serviceTimes[code]) || 12;
+    const next = Math.max(1, curr + delta);
+    currentActiveState.serviceTimes[code] = next;
+    renderInteractiveServices();
+    updateQuotaDisplay();
+    syncStateToServerImmediate();
+}
+
+function setServiceTimes(code, val) {
+    if (!currentActiveState) return;
+    if (!currentActiveState.serviceTimes) currentActiveState.serviceTimes = {};
+    const num = Math.max(1, parseInt(val) || 1);
+    currentActiveState.serviceTimes[code] = num;
+    renderInteractiveServices();
+    updateQuotaDisplay();
+    syncStateToServerImmediate();
+}
+
+function syncStateToServerImmediate() {
+    if (syncFormTimeout) clearTimeout(syncFormTimeout);
+    syncFormTimeout = setTimeout(async () => {
+        try {
+            await fetch("/api/chat/state", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ state: currentActiveState })
+            });
+        } catch (e) {
+            console.error("Failed to sync state to server:", e);
+        }
+    }, 200);
+}
+
+// --- SMART IMPORT, SIDEBAR TOGGLES & ACTION DOCK ---
+
+function toggleSmartImport() {
+    const body = document.getElementById("smart-import-body");
+    const icon = document.getElementById("btn-toggle-import")?.querySelector("i");
+    if (!body) return;
+    const isHidden = body.classList.contains("hidden");
+    if (isHidden) {
+        body.classList.remove("hidden");
+        if (icon) icon.className = "fa-solid fa-chevron-up";
+        const textarea = document.getElementById("smart-import-text");
+        if (textarea) textarea.focus();
+    } else {
+        body.classList.add("hidden");
+        if (icon) icon.className = "fa-solid fa-chevron-down";
+    }
+}
+
+function clearSmartImport() {
+    const textarea = document.getElementById("smart-import-text");
+    if (textarea) {
+        textarea.value = "";
+        textarea.focus();
+    }
+}
+
+async function handleSmartImportParse() {
+    const textarea = document.getElementById("smart-import-text");
+    if (!textarea || !textarea.value.trim()) {
+        showToast("請先貼上長照訪視評估紀錄長文！");
+        return;
+    }
+    
+    const text = textarea.value.trim();
+    const btn = document.getElementById("btn-smart-parse");
+    const origBtnHtml = btn ? btn.innerHTML : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>正在深度解析個案資料...</span>`;
+    }
+    
+    try {
+        const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text })
+        });
+        
+        if (res.ok) {
+            const data = await res.json();
+            if (data.state) {
+                currentActiveState = data.state;
+                syncFormFromState(data.state, true);
+                showToast(`✅ 已成功解析！個案「${data.state.name || '已填入'}」資料已完整更新至表單。`);
+                
+                // Add message to chat view
+                if (data.reply_text) {
+                    addChatMessage(data.reply_text, "assistant");
+                }
+                
+                // Close smart import box after successful parsing
+                const body = document.getElementById("smart-import-body");
+                if (body) body.classList.add("hidden");
+                const icon = document.getElementById("btn-toggle-import")?.querySelector("i");
+                if (icon) icon.className = "fa-solid fa-chevron-down";
+            }
+        } else {
+            showToast("⚠️ 解析失敗，請檢查網路連線或金鑰設定。");
+        }
+    } catch (e) {
+        console.error("Smart import parsing error:", e);
+        showToast(`⚠️ 解析時發生錯誤：${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origBtnHtml;
+        }
+    }
+}
+
+function toggleLeftSidebar() {
+    const container = document.querySelector(".workstation-container");
+    if (!container) return;
+    container.classList.toggle("left-collapsed");
+    const isCollapsed = container.classList.contains("left-collapsed");
+    localStorage.setItem("ws_left_collapsed", isCollapsed ? "1" : "0");
+}
+
+function toggleRightSidebar() {
+    const container = document.querySelector(".workstation-container");
+    if (!container) return;
+    container.classList.toggle("right-collapsed");
+    const isCollapsed = container.classList.contains("right-collapsed");
+    localStorage.setItem("ws_right_collapsed", isCollapsed ? "1" : "0");
+    
+    // Update button text and icon state if present
+    const headerBtn = document.getElementById("btn-toggle-ai-header");
+    if (headerBtn) {
+        const textSpan = headerBtn.querySelector(".ai-toggle-text");
+        if (textSpan) {
+            textSpan.textContent = isCollapsed ? "展開 AI" : "AI 助理";
+        }
+    }
+}
+
+function updatePrimaryActionDock(remainBC) {
+    const dockName = document.getElementById("dock-name");
+    const dockBadge = document.getElementById("dock-cms-badge");
+    const dockMeta = document.getElementById("dock-meta");
+    const dockAvatar = document.getElementById("dock-avatar");
+    
+    const st = currentActiveState || {};
+    const name = st.name || "未加載個案";
+    const cms = st.cmsLvl ? `CMS ${st.cmsLvl}級` : "CMS --";
+    const vDate = st.visitDate || "未排定訪視";
+    const vTime = st.visitTime ? ` ${st.visitTime}` : "";
+    const remStr = (remainBC !== undefined) ? ` ｜ 剩餘額度: $${remainBC.toLocaleString()}` : "";
+    
+    if (dockName) dockName.textContent = name;
+    if (dockBadge) dockBadge.textContent = cms;
+    if (dockMeta) dockMeta.textContent = `${vDate}${vTime}${remStr}`;
+    if (dockAvatar) dockAvatar.textContent = (name && name !== "未提供資料") ? name.charAt(0) : "個";
+}
+
+let syncFormTimeout = null;
+
+function updateStateFromForm() {
+    if (!currentActiveState) currentActiveState = {};
+    
+    function getVal(id) {
+        const el = document.getElementById(id);
+        return el ? el.value : "";
+    }
+    
+    currentActiveState.name = getVal("cb-name");
+    
+    let bYear = getVal("cb-birthYear");
+    // Convert 4-digit western year to ROC year if entered
+    if (bYear && !isNaN(bYear) && parseInt(bYear) > 1900) {
+        bYear = String(parseInt(bYear) - 1911);
+        const bEl = document.getElementById("cb-birthYear");
+        if (bEl) bEl.value = bYear;
+    }
+    currentActiveState.birthYear = bYear;
+    
+    currentActiveState.gender = getVal("cb-gender");
+    currentActiveState.statusVal = getVal("cb-statusVal");
+    currentActiveState.visitDate = getVal("cb-visitDate");
+    currentActiveState.visitTime = getVal("cb-visitTime");
+    currentActiveState.address = getVal("cb-address");
+    currentActiveState.planType = getVal("cb-planType");
+    currentActiveState.cmsLvl = getVal("cb-cmsLvl");
+    currentActiveState.trafLvl = getVal("cb-trafLvl");
+    currentActiveState.hasF = getVal("cb-hasF") === "true";
+    currentActiveState.livingStr = getVal("cb-livingStr");
+    currentActiveState.burdenStr = getVal("cb-burdenStr");
+    currentActiveState.specialistName = getVal("cb-specialistName");
+    
+    // Update Badge Text immediately
+    const badgeText = document.getElementById("case-badge-text");
+    if (badgeText) {
+        const cName = currentActiveState.name || "未提供資料";
+        const cmsLvl = currentActiveState.cmsLvl ? ` | CMS ${currentActiveState.cmsLvl}級` : "";
+        badgeText.textContent = `目前個案：${cName}${cmsLvl}`;
+    }
+    
+    // Debounce & Immediately sync state to backend database
+    if (syncFormTimeout) clearTimeout(syncFormTimeout);
+    syncFormTimeout = setTimeout(async () => {
+        try {
+            await fetch("/api/chat/state", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ state: currentActiveState })
+            });
+        } catch (e) {
+            console.error("Failed to sync state from form:", e);
+        }
+    }, 400);
+}
+
+async function fetchWithRetryAndTimeout(url, options = {}, retries = 2, timeoutMs = 30000) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const fetchOptions = { ...options, signal: controller.signal };
+        
+        try {
+            const res = await fetch(url, fetchOptions);
+            clearTimeout(timer);
+            return res;
+        } catch (err) {
+            clearTimeout(timer);
+            if (attempt === retries) throw err;
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+    }
+}
+
+async function handleSendChat(e) {
+    if (e) e.preventDefault();
+    const input = document.getElementById("ai-chat-input");
+    if (!input || !input.value.trim()) return;
+    
+    const msg = input.value.trim();
+    input.value = "";
+    
+    appendChatMessage(msg, "user");
+    
+    try {
+        const res = await fetchWithRetryAndTimeout(getApiUrl("/api/chat"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: msg })
+        }, 1, 45000);
+        
+        if (res.ok) {
+            const data = await res.json();
+            // Instantly render chat bubble with zero perceived UI lag
+            appendChatMessage(data.reply_text || "已收到指示。", "assistant");
+            // Defer 50+ DOM form updates to background event loop
+            if (data.state) {
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        updateFormFromState(data.state, true);
+                    }, 0);
+                });
+            }
+        } else {
+            let errText = "通訊出現錯誤，請再試一次。";
+            try {
+                const errJson = await res.json();
+                if (errJson && errJson.detail) errText = `系統提示：${errJson.detail}`;
+            } catch (e) {}
+            appendChatMessage(errText, "assistant");
+        }
+    } catch (err) {
+        console.error("Error sending chat:", err);
+        if (err.name === 'AbortError') {
+            appendChatMessage("⏱️ AI 運算回應超時（已嘗試連線35秒）。請再發送一次訊息即可！", "assistant");
+        } else {
+            appendChatMessage("🔌 本地連線短暫波動，背景伺服器已自動完成重新連線，請再次點擊發送！", "assistant");
+        }
+    }
+}
+
+function sendQuickChat(text) {
+    const input = document.getElementById("ai-chat-input");
+    if (input) {
+        input.value = text;
+        handleSendChat();
+    }
+}
+
+function formatChatText(text) {
+    if (!text) return "";
+    let html = text.replace(/(https?:\/\/[^\s<]+|\/download\/[a-zA-Z0-9_-]+)/g, (url) => {
+        let label = "🔗 點此開啟連結";
+        let btnClass = "btn-secondary";
+        if (url.includes("/download/")) {
+            label = "⬇️ 點此下載 Word 檔 (.doc)";
+            btnClass = "btn-primary";
+        } else if (url.includes("google.com") || url.includes("drive") || url.includes("docs")) {
+            label = "☁️ 點此開啟 Google 雲端硬碟 (線上直接修改內容)";
+            btnClass = "btn-success";
+        }
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="btn ${btnClass}" style="display: inline-flex; align-items: center; gap: 6px; margin: 6px 0; text-decoration: none; padding: 8px 14px; font-size: 13px; border-radius: 8px;">${label}</a>`;
+    });
+    return html.replace(/\n/g, "<br>");
+}
+
+function renderChatHistory(history) {
+    const container = document.getElementById("ai-messages-container");
+    if (!container) return;
+    if (!history || !Array.isArray(history) || history.length === 0) {
+        container.innerHTML = `<div class="chat-bubble assistant">👋 您好！我是您的長照 AI 助理。請將個案訪視評估內容貼在這裡，系統將自動解析並為您更新表單！</div>`;
+        return;
+    }
+    
+    container.innerHTML = "";
+    history.forEach(msg => {
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble ${msg.role === "user" ? "user" : "assistant"}`;
+        bubble.innerHTML = formatChatText(msg.content || "");
+        container.appendChild(bubble);
+    });
+    container.scrollTop = container.scrollHeight;
+}
+
+function sendQuickChatMessage(txt) {
+    const input = document.getElementById("ai-chat-input");
+    if (input) {
+        input.value = txt;
+        const form = document.getElementById("ai-chat-form");
+        if (form) {
+            handleSendChat();
+        }
+    }
+}
+
+function appendChatMessage(text, role) {
+    const container = document.getElementById("ai-messages-container");
+    if (!container) return;
+    
+    const bubble = document.createElement("div");
+    bubble.className = `chat-bubble ${role}`;
+    bubble.innerHTML = formatChatText(text || "");
+
+    if (role === "assistant" && text && text.includes("【行事曆建立前確認】")) {
+        const cardDiv = document.createElement("div");
+        cardDiv.className = "chat-confirmation-card";
+        cardDiv.innerHTML = `
+            <div class="chat-card-title"><i class="fa-solid fa-calendar-check"></i> 請點擊下方按鈕一鍵正式寫入日曆：</div>
+            <div class="chat-card-actions">
+                <button type="button" class="btn-chat-action btn-chat-confirm" onclick="sendQuickChatMessage('確認建立')">
+                    <i class="fa-solid fa-circle-check"></i> ✅ 確認建立至日曆
+                </button>
+            </div>
+        `;
+        bubble.appendChild(cardDiv);
+    }
+    
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+}
+
+function openPlanResultModal(downloadUrl, driveUrl) {
+    const modal = document.getElementById("plan-result-modal");
+    const wordBtn = document.getElementById("modal-download-word-btn");
+    const driveBtn = document.getElementById("modal-open-drive-btn");
+    
+    if (wordBtn) {
+        wordBtn.href = downloadUrl || "#";
+    }
+    if (driveBtn) {
+        if (driveUrl) {
+            driveBtn.href = driveUrl;
+            driveBtn.style.display = "inline-flex";
+            driveBtn.innerHTML = `<i class="fa-brands fa-google-drive"></i> ☁️ 開啟 Google 雲端硬碟 (線上直接修改內容)`;
+            driveBtn.className = "btn btn-success btn-block";
+        } else {
+            driveBtn.href = "https://drive.google.com";
+            driveBtn.style.display = "inline-flex";
+            driveBtn.innerHTML = `<i class="fa-brands fa-google-drive"></i> ☁️ 開啟 Google 雲端硬碟`;
+        }
+    }
+    if (modal) modal.classList.remove("hidden");
+}
+
+function closePlanResultModal() {
+    const modal = document.getElementById("plan-result-modal");
+    if (modal) modal.classList.add("hidden");
+}
+
+async function resetChatSession() {
+    if (!confirm("確定要清除目前的個案紀錄並重新開始嗎？")) return;
+    try {
+        const input = document.getElementById("ai-chat-input");
+        if (input) input.value = "";
+        
+        const res = await fetch("/api/chat/reset", { method: "POST" });
+        if (res.ok) {
+            const data = await res.json();
+            showToast("已成功清除目前個案紀錄！");
+            const container = document.getElementById("ai-messages-container");
+            if (container) {
+                container.innerHTML = `<div class="chat-bubble assistant">👋 已成功清空目前紀錄。請輸入新個案的訪視資料或語音內容開始處理！</div>`;
+            }
+            if (data.state) {
+                currentActiveState = data.state;
+                updateFormFromState(data.state, true);
+            }
+        }
+    } catch (e) {
+        showToast("清空紀錄失敗：" + e.message);
+    }
+}
+
+async function openCaseSelectorModal() {
+    const modal = document.getElementById("case-selector-modal");
+    const list = document.getElementById("case-selector-list");
+    if (!modal || !list) return;
+    
+    list.innerHTML = `<div style="padding:10px; color:var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i> 載入個案清單中...</div>`;
+    modal.classList.remove("hidden");
+    
+    try {
+        const res = await fetch(getApiUrl("/api/cases"));
+        if (res.ok) {
+            const data = await res.json();
+            const cases = data.cases || [];
+            if (cases.length > 0) {
+                list.innerHTML = cases.map(c => `
+                    <button class="chip-btn" onclick="loadCaseByName(decodeURIComponent('${encodeURIComponent(c)}'))" style="font-size:0.9rem; padding:8px 16px;">
+                        <i class="fa-solid fa-user-check"></i> ${escapeHTML(c)}
+                    </button>
+                `).join("");
+            } else {
+                list.innerHTML = `<div style="padding:10px; color:var(--text-muted);">尚無保存的個案紀錄</div>`;
+            }
+        }
+    } catch (e) {
+        list.innerHTML = `<div style="color:#ef4444; padding:10px;">載入失敗：${e.message}</div>`;
+    }
+}
+
+let allSidebarCases = [];
+
+function renderSidebarCaseCards(casesToRender) {
+    const list = document.getElementById("sidebar-resident-list");
+    if (!list) return;
+    
+    const searchInput = document.getElementById("sidebar-case-search");
+    const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
+    
+    const cases = casesToRender !== undefined ? casesToRender : allSidebarCases;
+    
+    if (cases && cases.length > 0) {
+        list.innerHTML = cases.map((cName) => {
+            const avatarChar = cName.charAt(0);
+            const isActive = (currentActiveState && currentActiveState.name === cName);
+            const enc = encodeURIComponent(cName);
+            return `
+                <div class="resident-profile-card ${isActive ? 'active' : ''}" onclick="loadCaseByName(decodeURIComponent('${enc}'))">
+                    <div class="resident-card-header">
+                        <div class="resident-avatar-name">
+                            <div class="resident-avatar">${escapeHTML(avatarChar)}</div>
+                            <span class="resident-name">${escapeHTML(cName)}</span>
+                        </div>
+                        <span class="resident-tag">已留存</span>
+                    </div>
+                    <div class="resident-details">
+                        <span>點擊載入個案資料</span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    } else {
+        if (query) {
+            list.innerHTML = `
+                <div style="padding: 24px 10px; text-align: center; color: var(--text-muted); font-size: 0.82rem;">
+                    <i class="fa-solid fa-magnifying-glass" style="margin-bottom: 8px; font-size: 1.2rem; display: block; opacity: 0.6;"></i>
+                    未找到相符個案<br>
+                    <span style="font-size: 0.75rem; opacity: 0.8;">搜尋關鍵字「${escapeHTML(query)}」無結果</span>
+                </div>
+            `;
+        } else {
+            list.innerHTML = `
+                <div style="padding: 20px 10px; text-align: center; color: var(--text-muted); font-size: 0.8rem;">
+                    <i class="fa-solid fa-folder-open" style="margin-bottom: 8px; font-size: 1.3rem; display: block; opacity: 0.6;"></i>
+                    尚無個案資料<br>
+                    <span style="font-size: 0.75rem; opacity: 0.8;">點擊「個案清單」或透過 AI 建立</span>
+                </div>
+            `;
+        }
+    }
+}
+
+function handleSidebarCaseSearch(query) {
+    const q = (query || "").trim().toLowerCase();
+    if (!q) {
+        renderSidebarCaseCards(allSidebarCases);
+        return;
+    }
+    const filtered = allSidebarCases.filter(cName => cName.toLowerCase().includes(q));
+    renderSidebarCaseCards(filtered);
+}
+
+function initSidebarCaseSearch() {
+    const searchInput = document.getElementById("sidebar-case-search");
+    if (searchInput && !searchInput.dataset.hasSearchListener) {
+        searchInput.dataset.hasSearchListener = "true";
+        searchInput.addEventListener("input", (e) => {
+            handleSidebarCaseSearch(e.target.value);
+        });
+    }
+}
+
+async function loadSidebarResidentCards() {
+    initSidebarCaseSearch();
+    const list = document.getElementById("sidebar-resident-list");
+    if (!list) return;
+    try {
+        const res = await fetch(getApiUrl("/api/cases"));
+        if (res.ok) {
+            const data = await res.json();
+            allSidebarCases = data.cases || [];
+            const searchInput = document.getElementById("sidebar-case-search");
+            const currentQuery = searchInput ? searchInput.value : "";
+            handleSidebarCaseSearch(currentQuery);
+        }
+    } catch (e) {
+        console.warn("Sidebar cases fetch warning:", e);
+    }
+}
+
+function closeCaseSelectorModal() {
+    const modal = document.getElementById("case-selector-modal");
+    if (modal) modal.classList.add("hidden");
+}
+
+function closeCaseSelectorModalOnOverlay(e) {
+    if (e.target && e.target.id === "case-selector-modal") {
+        closeCaseSelectorModal();
+    }
+}
+
+async function loadCaseByName(name) {
+    if (!name) return;
+    try {
+        const res = await fetch(getApiUrl("/api/cases/load"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.state) {
+                showToast(`已成功載入個案「${name}」！`);
+                currentActiveState = data.state;
+                // 自動切換至工作站中間「個案填報與即時評估表」面板
+                switchWorktab('builder');
+                updateFormFromState(data.state, true);
+                loadSidebarResidentCards();
+                if (data.state._history && Array.isArray(data.state._history) && data.state._history.length > 0) {
+                    renderChatHistory(data.state._history);
+                } else {
+                    appendChatMessage(`已為您載入個案「${name}」的紀錄！`, "assistant");
+                }
+                closeCaseSelectorModal();
+            } else {
+                showToast(data.error || "載入失敗");
+            }
+        } else {
+            showToast("載入個案伺服器回應異常");
+        }
+    } catch (e) {
+        showToast("載入個案發生錯誤：" + e.message);
+    }
+}
+
+async function generateCarePlan() {
+    showToast("⏳ 正在產出照顧計畫書與同步至 Google Drive...");
+    try {
+        const res = await fetch("/debug-drive");
+        if (res.ok) {
+            const data = await res.json();
+            const userId = data.user_id || "default_user";
+            const downloadUrl = `/download/${userId}`;
+            let driveUrl = null;
+            
+            if (data.upload_result && data.upload_result.success) {
+                driveUrl = data.upload_result.link;
+                showToast("✅ 照顧計畫書產出成功！已同步上傳至 Google Drive。");
+            } else {
+                showToast("✅ 照顧計畫書產出成功！");
+            }
+            
+            // Pop up Modal with Action Buttons!
+            openPlanResultModal(downloadUrl, driveUrl);
+            
+            // Append result and links into the AI Chat window
+            let chatMsg = `🎉 **照顧計畫書已成功產出！**\n\n`;
+            chatMsg += `⬇️ 點此下載 Word 檔：\n${window.location.origin}${downloadUrl}\n\n`;
+            if (driveUrl) {
+                chatMsg += `☁️ 點此開啟 Google 雲端硬碟線上版：\n${driveUrl}`;
+            }
+            appendChatMessage(chatMsg, "assistant");
+        } else {
+            showToast("產出計畫書失敗，請再試一次。");
+        }
+    } catch (e) {
+        showToast("產出計畫書時發生錯誤：" + e.message);
+    }
+}
+
+function syncCalendarFromWeb() {
+    sendQuickChat("建立行事曆");
+}
+
+// Voice Speech Recognition Input
+let speechRecognizer = null;
+let isRecording = false;
+
+function toggleVoiceInput() {
+    const voiceBtn = document.getElementById("btn-voice-chat");
+    const input = document.getElementById("ai-chat-input");
+    
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        showToast("您的瀏覽器不支援語音辨識，請使用 Chrome 或 Edge。");
+        return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (isRecording) {
+        if (speechRecognizer) speechRecognizer.stop();
+        isRecording = false;
+        if (voiceBtn) voiceBtn.classList.remove("recording");
+        return;
+    }
+    
+    speechRecognizer = new SpeechRecognition();
+    speechRecognizer.lang = 'zh-TW';
+    speechRecognizer.continuous = false;
+    speechRecognizer.interimResults = false;
+    
+    speechRecognizer.onstart = () => {
+        isRecording = true;
+        if (voiceBtn) voiceBtn.classList.add("recording");
+        showToast("🎙️ 請開始對話，系統正在聆聽中...");
+    };
+    
+    speechRecognizer.onresult = (event) => {
+        const text = event.results[0][0].transcript;
+        if (input) input.value = text;
+        showToast("已辨識語音：" + text);
+        handleSendChat();
+    };
+    
+    speechRecognizer.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        showToast("語音辨識發生錯誤：" + event.error);
+        isRecording = false;
+        if (voiceBtn) voiceBtn.classList.remove("recording");
+    };
+    
+    speechRecognizer.onend = () => {
+        isRecording = false;
+        if (voiceBtn) voiceBtn.classList.remove("recording");
+    };
+    
+    speechRecognizer.start();
+}
+
+// --- AUTO UPDATER UI ---
+function openUpdateModal() {
+    const modal = document.getElementById("update-modal");
+    if (modal) modal.classList.remove("hidden");
+    checkSystemUpdateUI();
+}
+
+function closeUpdateModal() {
+    const modal = document.getElementById("update-modal");
+    if (modal) modal.classList.add("hidden");
+}
+
+async function checkSystemUpdateUI() {
+    openUpdateModal();
+    const content = document.getElementById("update-status-content");
+    const footer = document.getElementById("update-modal-footer");
+    
+    if (content) {
+        content.innerHTML = `<p><i class="fa-solid fa-spinner fa-spin icon-accent-calendar"></i> 正在連線至雲端檢查最新版本...</p>`;
+    }
+    
+    try {
+        const res = await fetch("/api/system/check-update");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.has_update) {
+                if (content) {
+                    content.innerHTML = `
+                        <div class="update-found-box" style="padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border: 1px solid var(--accent-blue);">
+                            <h3 style="color: var(--accent-blue); margin-bottom: 8px;"><i class="fa-solid fa-sparkles"></i> 發現新版本：v${data.latest_version}</h3>
+                            <p style="font-size: 0.9rem; margin-bottom: 6px;">目前版本：v${data.current_version} (${data.release_date || ""})</p>
+                            <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-primary);"><strong>更新日誌：</strong> ${data.changelog}</p>
+                        </div>
+                    `;
+                }
+                if (footer) {
+                    footer.innerHTML = `
+                        <button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">暫不更新</button>
+                        <button type="button" class="btn btn-primary" onclick="applySystemUpdateUI('${data.download_url}')"><i class="fa-solid fa-cloud-arrow-down"></i> 一鍵下載並更新</button>
+                    `;
+                }
+            } else {
+                if (content) {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 20px 0;">
+                            <i class="fa-solid fa-circle-check" style="font-size: 2.5rem; color: var(--accent-green); margin-bottom: 10px;"></i>
+                            <h3>您目前使用的是最新版本！(v${data.current_version})</h3>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 6px;">無需更新，系統運作一切正常。</p>
+                        </div>
+                    `;
+                }
+                if (footer) {
+                    footer.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">關閉</button>`;
+                }
+            }
+        } else {
+            throw new Error("HTTP " + res.status);
+        }
+    } catch (e) {
+        if (content) {
+            content.innerHTML = `<p style="color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> 檢查更新失敗：${e.message}</p>`;
+        }
+        if (footer) {
+            footer.innerHTML = `<button type="button" class="btn btn-secondary" onclick="closeUpdateModal()">關閉</button>`;
+        }
+    }
+}
+
+async function applySystemUpdateUI(url) {
+    const content = document.getElementById("update-status-content");
+    const footer = document.getElementById("update-modal-footer");
+    
+    if (content) {
+        content.innerHTML = `<p><i class="fa-solid fa-spinner fa-spin"></i> 正在線上下載更新套件並安裝中，請稍候...</p>`;
+    }
+    if (footer) footer.innerHTML = "";
+    
+    try {
+        const res = await fetch("/api/system/apply-update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ download_url: url })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+                showToast("✅ 軟體已成功更新！即將重新載入...");
+                setTimeout(() => { window.location.reload(); }, 2000);
+            } else {
+                showToast("❌ 更新失敗：" + data.error);
+            }
+        }
+    } catch (e) {
+        showToast("更新過程發生錯誤：" + e.message);
+    }
 }

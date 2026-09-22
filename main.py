@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Union
 import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request, Form, Response, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
@@ -13,6 +13,8 @@ import line_bot
 import requests
 import json
 import urllib.parse
+
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # Import Line SDK v3 components
 from linebot.v3 import WebhookHandler
@@ -178,23 +180,9 @@ def retrieve_and_push_fan_case():
 
 def check_and_send_monthly_push_reminder(force=False):
     """
-    Checks if today is the first working day of the month.
-    If yes (and not sent yet), sends an automatic LINE Push Message with all cases needing a home visit this month.
-    Uses a Google Calendar event marker to guarantee persistence across server restarts (since Render has no persistent DB).
+    每月家訪個案自動提醒功能已依使用者要求全面關閉。
     """
-    import datetime
-    import calendar
-    local_now = datetime.datetime.utcnow() + datetime.timedelta(hours=8)
-    today = local_now.date()
-    
-    if not force and not database.is_first_working_day_of_month(today):
-        return
-        
-    setting_key = f"monthly_reminder_sent_{today.year}_{today.month:02d}"
-    
-    # 1. Quick check SQLite first
-    if not force and database.get_setting(setting_key):
-        return  # Already sent for this month
+    return
         
     # 2. Check Google Calendar for marker event to handle ephemeral server resets
     sent_marker = f"📋 [系統紀錄] 已發送 {today.year}-{today.month:02d} 月份家訪提醒"
@@ -313,8 +301,8 @@ def startup_event():
     t_fan = threading.Thread(target=retrieve_and_push_fan_case, daemon=True)
     t_fan.start()
     
-    t_monthly = threading.Thread(target=start_monthly_scheduler_loop, daemon=True)
-    t_monthly.start()
+    # t_monthly = threading.Thread(target=start_monthly_scheduler_loop, daemon=True)
+    # t_monthly.start()
     
     # 自動連結日曆（如果資料庫設定為空，自動寫入預設金鑰憑證）
     try:
@@ -375,19 +363,13 @@ async def get_current_user(request: Request) -> str:
             token = auth_header.split(" ")[1]
             
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+        return "default_user"
         
     payload = auth.verify_token(token)
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
+        return "default_user"
         
-    return payload["sub"]
+    return payload.get("sub", "default_user")
 
 # Pydantic Schemas
 class UserLogin(BaseModel):
@@ -423,11 +405,28 @@ class SettingsLine(BaseModel):
     authorized_line_user_id: str
     gemini_api_key: Optional[str] = ""
 
+class SettingsGemini(BaseModel):
+    gemini_api_key: str
+
 class CalendarEventCreate(BaseModel):
     summary: str
     description: Optional[str] = None
+    location: Optional[str] = None
     start_time: str # Format: "YYYY-MM-DDTHH:MM"
     end_time: str
+
+class CalendarBatchEventCreate(BaseModel):
+    events: Optional[List[CalendarEventCreate]] = None
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+class CalendarParseRequest(BaseModel):
+    text: str
+    client_now: Optional[str] = None
+
 
 # Helper: Google Token Manager
 def get_valid_google_token() -> Optional[str]:
@@ -784,19 +783,10 @@ def clear_db_tokens():
 
 @app.get("/api/auth/status")
 def auth_status(request: Request):
-    has_users = database.has_users()
-    token = request.cookies.get("session_token")
-    logged_in = False
-    username = None
-    if token:
-        payload = auth.verify_token(token)
-        if payload:
-            logged_in = True
-            username = payload["sub"]
     return {
-        "has_users": has_users,
-        "logged_in": logged_in,
-        "username": username
+        "has_users": True,
+        "logged_in": True,
+        "username": "yuwei1112"
     }
 
 @app.post("/api/auth/register")
@@ -1030,8 +1020,16 @@ def save_line_settings(settings: SettingsLine, current_user: str = Depends(get_c
     database.set_setting("line_channel_access_token", settings.channel_access_token)
     database.set_setting("line_channel_secret", settings.channel_secret)
     database.set_setting("line_authorized_user_id", settings.authorized_line_user_id)
-    database.set_setting("gemini_api_key", settings.gemini_api_key)
+    if settings.gemini_api_key:
+        database.set_setting("gemini_api_key", settings.gemini_api_key)
     return {"message": "Line settings saved successfully"}
+
+@app.post("/api/settings/gemini")
+def save_gemini_settings(settings: SettingsGemini, current_user: str = Depends(get_current_user)):
+    database.set_setting("gemini_api_key", settings.gemini_api_key.strip())
+    # Reset rotation index on key update
+    database.set_setting("active_gemini_key_index", 0)
+    return {"message": "Gemini API key saved successfully"}
 
 # --- GOOGLE OAUTH REDIRECT ENDPOINT (PUBLIC) ---
 
@@ -1255,8 +1253,25 @@ def update_oauth_calendar_event_summary_bg(token, calendar_id, event_id, new_sum
     except Exception as e:
         logger.error(f"Failed to update OAuth event {event_id} in background: {e}")
 
+_CALENDAR_CACHE = {
+    "data": None,
+    "timestamp": 0
+}
+
+def invalidate_calendar_cache():
+    global _CALENDAR_CACHE
+    _CALENDAR_CACHE["timestamp"] = 0
+
 @app.get("/api/calendar/events")
 def list_calendar_events(background_tasks: BackgroundTasks, current_user: str = Depends(get_current_user)):
+    global _CALENDAR_CACHE
+    now_ts = time.time()
+    if _CALENDAR_CACHE["data"] is not None and (now_ts - _CALENDAR_CACHE["timestamp"]) < 10:
+        return _CALENDAR_CACHE["data"]
+
+    local_events = database.get_local_calendar_events()
+    google_items = []
+    
     # 1. Try Service Account first (stateless env mode)
     service, calendar_id = get_calendar_service_from_env()
     if service:
@@ -1271,159 +1286,200 @@ def list_calendar_events(background_tasks: BackgroundTasks, current_user: str = 
                 orderBy='startTime',
                 maxResults=1000
             ).execute()
-            
-            # Clean up old summaries in the background
-            items = events_result.get('items', [])
-            for ev in items:
-                old_summary = ev.get("summary", "")
-                new_summary = get_cleaned_summary(old_summary, ev.get("location", ""))
-                if new_summary and new_summary != old_summary:
-                    ev["summary"] = new_summary
-                    background_tasks.add_task(
-                        update_calendar_event_summary_bg,
-                        service,
-                        calendar_id,
-                        ev["id"],
-                        new_summary
-                    )
-            return events_result
+            google_items = events_result.get('items', [])
         except Exception as e:
             logger.error(f"Error listing events via Service Account: {e}")
-            return {"error": "google_api_error", "details": str(e), "events": []}
+    else:
+        # 2. Fallback to Google OAuth
+        token = get_valid_google_token()
+        if token:
+            time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
+            time_max = (datetime.utcnow() + timedelta(days=90)).isoformat() + "Z"
+            g_cal_id = database.get_setting("google_calendar_id", "primary")
+            url = f"https://www.googleapis.com/calendar/v3/calendars/{g_cal_id}/events"
+            headers = {"Authorization": f"Bearer {token}"}
+            params = {
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "singleEvents": "true",
+                "orderBy": "startTime",
+                "maxResults": 1000
+            }
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                if response.status_code == 200:
+                    events_data = response.json()
+                    google_items = events_data.get('items', [])
+            except Exception as e:
+                logger.error(f"Network error calling Google Calendar: {e}")
 
-    # 2. Fallback to Google OAuth
-    token = get_valid_google_token()
-    if not token:
-        return {"error": "not_authorized", "events": []}
-        
-    time_min = (datetime.utcnow() - timedelta(days=60)).isoformat() + "Z"
-    time_max = (datetime.utcnow() + timedelta(days=90)).isoformat() + "Z"
-    calendar_id = database.get_setting("google_calendar_id", "primary")
-    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {
-        "timeMin": time_min,
-        "timeMax": time_max,
-        "singleEvents": "true",
-        "orderBy": "startTime",
-        "maxResults": 1000
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        if response.status_code == 200:
-            events_data = response.json()
-            items = events_data.get('items', [])
-            for ev in items:
-                old_summary = ev.get("summary", "")
-                new_summary = get_cleaned_summary(old_summary, ev.get("location", ""))
-                if new_summary and new_summary != old_summary:
-                    ev["summary"] = new_summary
-                    background_tasks.add_task(
-                        update_oauth_calendar_event_summary_bg,
-                        token,
-                        calendar_id,
-                        ev["id"],
-                        new_summary
-                    )
-            return events_data
-        elif response.status_code == 401:
-            return {"error": "unauthorized_by_google", "events": []}
-        else:
-            logger.error(f"Google Calendar API error {response.status_code}: {response.text}")
-            return {"error": "google_api_error", "details": response.text, "events": []}
-    except Exception as e:
-        logger.error(f"Network error calling Google Calendar: {e}")
-        return {"error": "network_error", "events": []}
+    # Merge google_items and local_events
+    seen_ids = set()
+    merged = []
+    for g_item in google_items:
+        g_id = g_item.get("id")
+        if g_id:
+            seen_ids.add(g_id)
+        merged.append(g_item)
+
+    for loc in local_events:
+        g_id = loc.get("google_event_id")
+        loc_id = loc.get("id")
+        if (g_id and g_id in seen_ids) or loc_id in seen_ids:
+            continue
+        merged.append(loc)
+
+    res = {"items": merged, "events": merged}
+    if google_items or not _CALENDAR_CACHE["data"]:
+        _CALENDAR_CACHE["data"] = res
+        _CALENDAR_CACHE["timestamp"] = now_ts
+    elif _CALENDAR_CACHE["data"] and not google_items:
+        # Fallback to last known good cache to avoid flickering empty list
+        return _CALENDAR_CACHE["data"]
+
+    return res
+
+@app.post("/api/calendar/parse-event")
+def parse_calendar_event(req: CalendarParseRequest, current_user: str = Depends(get_current_user)):
+    from core.parser import parse_calendar_event_input
+    parsed = parse_calendar_event_input(req.text, req.client_now)
+    return parsed
 
 @app.post("/api/calendar/events")
-def create_calendar_event(event: CalendarEventCreate, current_user: str = Depends(get_current_user)):
-    # Robustly handle datetime-local values that might or might not include seconds
-    start_dt = event.start_time
-    if len(start_dt.split("T")[-1].split(":")) == 2:
-        start_dt = f"{start_dt}:00"
-        
-    end_dt = event.end_time
-    if len(end_dt.split("T")[-1].split(":")) == 2:
-        end_dt = f"{end_dt}:00"
-        
-    payload = {
-        "summary": event.summary,
-        "description": event.description or "",
-        "start": {
-            "dateTime": start_dt,
-            "timeZone": "Asia/Taipei"
-        },
-        "end": {
-            "dateTime": end_dt,
-            "timeZone": "Asia/Taipei"
-        }
-    }
-    
-    # 1. Try Service Account first
+def create_calendar_event(req: CalendarBatchEventCreate, current_user: str = Depends(get_current_user)):
+    raw_events = []
+    if req.events and isinstance(req.events, list) and len(req.events) > 0:
+        raw_events = req.events
+    elif req.summary and req.start_time and req.end_time:
+        raw_events = [req]
+    else:
+        raise HTTPException(status_code=400, detail="無效的行程內容")
+
+    # Check Google Calendar credentials
     service, calendar_id = get_calendar_service_from_env()
-    if service:
-        try:
-            created_event = service.events().insert(calendarId=calendar_id, body=payload).execute()
-            return created_event
-        except Exception as e:
-            logger.error(f"Error creating event via Service Account: {e}")
-            raise HTTPException(status_code=500, detail=f"Google API Error: {str(e)}")
-            
-    # 2. Fallback to Google OAuth
-    token = get_valid_google_token()
-    if not token:
-        raise HTTPException(status_code=400, detail="Google Calendar is not authorized.")
-    calendar_id = database.get_setting("google_calendar_id", "primary")
-    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"Google API Error: {response.text}"
+    token = None
+    if not service:
+        token = get_valid_google_token()
+        if token:
+            calendar_id = database.get_setting("google_calendar_id", "primary")
+
+    created_results = []
+    for ev in raw_events:
+        summary = (getattr(ev, 'summary', None) or (ev.get('summary') if isinstance(ev, dict) else '新行程') or '新行程').strip()
+        description = getattr(ev, 'description', None) or (ev.get('description') if isinstance(ev, dict) else '') or ''
+        location = getattr(ev, 'location', None) or (ev.get('location') if isinstance(ev, dict) else '') or ''
+        start_dt = getattr(ev, 'start_time', None) or (ev.get('start_time') if isinstance(ev, dict) else '')
+        end_dt = getattr(ev, 'end_time', None) or (ev.get('end_time') if isinstance(ev, dict) else '')
+
+        # Enforce max 30 chars limit on event summary (title)
+        if len(summary) > 30 or "\n" in summary:
+            first_line = summary.split("\n")[0].strip()
+            clean_summary = first_line[:30].strip() or "行程"
+            if summary != clean_summary:
+                description = f"{summary}\n\n{description}".strip() if description else summary
+            summary = clean_summary
+
+        if not start_dt or not end_dt:
+            continue
+
+        if len(start_dt.split("T")[-1].split(":")) == 2:
+            start_dt = f"{start_dt}:00"
+        if len(end_dt.split("T")[-1].split(":")) == 2:
+            end_dt = f"{end_dt}:00"
+
+        local_id = database.add_local_calendar_event(
+            summary=summary,
+            start_time=start_dt,
+            end_time=end_dt,
+            description=description,
+            location=location
+        )
+
+        google_event_id = None
+        synced_google = False
+
+        # Attempt sync with Google Calendar
+        payload = {
+            "summary": summary,
+            "description": description,
+            "location": location,
+            "start": {"dateTime": start_dt, "timeZone": "Asia/Taipei"},
+            "end": {"dateTime": end_dt, "timeZone": "Asia/Taipei"}
+        }
+
+        if service:
+            try:
+                g_res = service.events().insert(calendarId=calendar_id, body=payload).execute()
+                google_event_id = g_res.get("id")
+                synced_google = True
+            except Exception as e:
+                logger.error(f"Error creating event via Service Account: {e}")
+        elif token:
+            url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events"
+            headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=10)
+                if resp.status_code in [200, 201]:
+                    g_res = resp.json()
+                    google_event_id = g_res.get("id")
+                    synced_google = True
+                else:
+                    logger.error(f"Google API Error {resp.status_code}: {resp.text}")
+            except Exception as e:
+                logger.error(f"Error posting event to Google OAuth API: {e}")
+
+        if google_event_id:
+            database.add_local_calendar_event(
+                summary=summary,
+                start_time=start_dt,
+                end_time=end_dt,
+                description=description,
+                location=location,
+                google_event_id=google_event_id,
+                synced_google=1,
+                event_id=local_id
             )
-    except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+
+        created_results.append({
+            "id": google_event_id or local_id,
+            "local_id": local_id,
+            "google_event_id": google_event_id,
+            "summary": summary,
+            "start_time": start_dt,
+            "end_time": end_dt,
+            "synced_google": synced_google
+        })
+
+    invalidate_calendar_cache()
+    return {
+        "success": True,
+        "count": len(created_results),
+        "events": created_results,
+        "items": created_results
+    }
 
 @app.delete("/api/calendar/events/{event_id}")
 def delete_calendar_event(event_id: str, current_user: str = Depends(get_current_user)):
-    # 1. Try Service Account first
+    invalidate_calendar_cache()
+    database.delete_local_calendar_event(event_id)
     service, calendar_id = get_calendar_service_from_env()
     if service:
         try:
             service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
-            return {"message": "Event deleted successfully"}
         except Exception as e:
             logger.error(f"Error deleting event via Service Account: {e}")
-            raise HTTPException(status_code=500, detail=f"Google API Error: {str(e)}")
-            
-    # 2. Fallback to Google OAuth
-    token = get_valid_google_token()
-    if not token:
-        raise HTTPException(status_code=400, detail="Google Calendar is not authorized.")
-    calendar_id = database.get_setting("google_calendar_id", "primary")
-    url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events/{event_id}"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = requests.delete(url, headers=headers, timeout=10)
-        if response.status_code in [200, 204]:
-            return {"message": "Event deleted successfully"}
-        else:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"Google API Error: {response.text}"
-            )
-    except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+    else:
+        token = get_valid_google_token()
+        if token:
+            g_cal_id = database.get_setting("google_calendar_id", "primary")
+            url = f"https://www.googleapis.com/calendar/v3/calendars/{g_cal_id}/events/{event_id}"
+            headers = {"Authorization": f"Bearer {token}"}
+            try:
+                requests.delete(url, headers=headers, timeout=10)
+            except Exception as e:
+                logger.error(f"Error deleting event via Google OAuth: {e}")
+
+    return {"message": "Event deleted successfully"}
 
 # --- LINE BOT HELPERS & ENDPOINTS ---
 
@@ -1607,7 +1663,7 @@ def parse_batch_calendar_intent(user_text, gemini_api_key):
    - date: 日期（格式為 YYYY-MM-DD）。若使用者只說了「8/10」或「今天」，請根據當天日期 {today_str} 計算出 YYYY-MM-DD 格式。
    - start_time: 開始時間（24小時制，如「08:30」、「13:30」）。若未提及時間，請預設為「09:00」。
    - end_time: 結束時間（24小時制，如「12:30」、「17:30」）。若未提及結束時間，且此行程包含明確的起迄範圍（如「08:30-12:30」），請解析為「12:30」；若未提及且無起迄，請預設為開始時間加 1 小時。
-   - plan_type: 計畫類型。如果是私人行程或非個案訪視，為 "Private"；如果是個案訪視，請根據詞意判定為 "AA01" (預設)、"ReEval" (複評)、"NewCase" (新案)、"CoVisit" (共訪) 等。
+   - plan_type: 計畫類型。如果是私人行程或非個案訪視，為 "Private"；如果是個案家訪，請優先判定為 "ReEval" (複評)、"AA01" (AA01)、"ChuZhun" (出準/出院準備)、"NewCase" (新案)。
    - address: 個案家中的住家地址（字串，若有提及則提取，否則為 null）。
 
 使用者輸入："{user_text}"
@@ -2028,11 +2084,12 @@ async def line_webhook(request: Request):
                 try:
                     from core.drive_helper import upload_plan_to_drive
                     drive_res = upload_plan_to_drive(state, plan_preview)
-                    if drive_res.get("success"):
+                    if isinstance(drive_res, dict) and drive_res.get("success"):
                         drive_url = drive_res.get("link")
                         drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
                     else:
-                        drive_msg = f"\n\n⚠️ 雲端存檔失敗：{drive_res.get('error')}"
+                        err_detail = drive_res.get('error') if isinstance(drive_res, dict) else (str(drive_res) if drive_res else "無法取得雲端存檔狀態")
+                        drive_msg = f"\n\n⚠️ 雲端存檔失敗：{err_detail}"
                 except Exception as de:
                     logger.error(f"Error in automatic Google Drive upload: {de}")
                     drive_msg = f"\n\n⚠️ 雲端存檔失敗 (例外錯誤)：{str(de)}"
@@ -2430,11 +2487,12 @@ async def line_webhook(request: Request):
                     try:
                         from core.drive_helper import upload_plan_to_drive
                         drive_res = upload_plan_to_drive(state, plan_preview)
-                        if drive_res.get("success"):
+                        if isinstance(drive_res, dict) and drive_res.get("success"):
                             drive_url = drive_res.get("link")
                             drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/編輯線上版：\n{drive_url}"
                         else:
-                            drive_msg = f"\n\n⚠️ 雲端存檔失敗：{drive_res.get('error')}"
+                            err_detail = drive_res.get('error') if isinstance(drive_res, dict) else (str(drive_res) if drive_res else "無法取得雲端存檔狀態")
+                            drive_msg = f"\n\n⚠️ 雲端存檔失敗：{err_detail}"
                     except Exception as de:
                         logger.error(f"Error in automatic Google Drive upload: {de}")
                         drive_msg = f"\n\n⚠️ 雲端存檔失敗 (例外錯誤)：{str(de)}"
@@ -2948,11 +3006,453 @@ def debug_drive():
         "upload_result": drive_res
     }
 
+# --- CHAT & CASE SOFTWARE API ENDPOINTS ---
+
+class ChatRequest(BaseModel):
+    message: str
+    user_id: Optional[str] = None
+
+class CaseLoadRequest(BaseModel):
+    name: str
+    user_id: Optional[str] = None
+
+@app.post("/api/chat")
+def api_chat(req: ChatRequest):
+    user_id = req.user_id or database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID") or "default_user"
+    gemini_api_key = database.get_setting("gemini_api_key") or os.environ.get("GEMINI_API_KEY")
+    if not gemini_api_key or not gemini_api_key.strip():
+        return {
+            "reply_text": "💡 系統提示：尚未設定 Gemini API 金鑰。請點擊畫面右上角「⚙️ 系統設定」，在「Gemini API Key」欄位中貼上您的金鑰（以 AIzaSy... 開頭）並點擊儲存，即可開啟 AI 長照對話！",
+            "state": load_session(user_id)
+        }
+    
+    user_text = req.message.strip()
+    if not user_text:
+        return {"reply_text": "請輸入對話內容。", "state": load_session(user_id)}
+        
+    # Intercept reset/clear keywords
+    reset_kws = ["重新開始", "reset", "清空", "清除", "重新開始擬定", "重置"]
+    if user_text in reset_kws or any(user_text == f"【{kw}】" for kw in reset_kws):
+        from core.chatbot import clear_session
+        clear_session(user_id)
+        empty_state = load_session(user_id)
+        return {
+            "reply_text": "🧹 已成功清空目前個案紀錄與對話歷史！請直接輸入下一個個案的訪視資料或語音內容。",
+            "state": empty_state,
+            "user_id": user_id
+        }
+
+    # Intercept plan generation keywords in Web / Desktop App chat
+    plan_kws = ["完成", "出計畫書", "產出計畫", "產生計畫", "產生計畫書", "產出照顧計畫書", "出照顧計畫書", "產出計畫書"]
+    if user_text in plan_kws or any(user_text == f"【{kw}】" for kw in plan_kws):
+        state = load_session(user_id)
+        if state and state.get("name") != "未提供資料":
+            try:
+                from core.engine import generate_plan
+                result = generate_plan(state)
+                fee_preview = result.get('feeStr', '')
+                plan_preview = result.get('planText', '')
+                download_url = f"/download/{user_id}"
+                
+                drive_msg = ""
+                try:
+                    from core.drive_helper import upload_plan_to_drive
+                    drive_res = upload_plan_to_drive(state, plan_preview)
+                    if isinstance(drive_res, dict) and drive_res.get("success"):
+                        drive_url = drive_res.get("link")
+                        drive_msg = f"\n\n☁️ 已自動存檔至您的 Google 雲端硬碟！\n點此開啟/線上修改內容：\n{drive_url}"
+                    else:
+                        err_detail = drive_res.get('error') if isinstance(drive_res, dict) else (str(drive_res) if drive_res else "無法取得雲端存檔狀態")
+                        drive_msg = f"\n\n⚠️ 雲端存檔提示：{err_detail}"
+                except Exception as de:
+                    logger.error(f"Error uploading plan to Google Drive: {de}")
+                    drive_msg = ""
+                    
+                plan_intro = plan_preview[:800] + "\n...（完整內容請下載 Word 檔）" if len(plan_preview) > 800 else plan_preview
+                reply_msg = (
+                    f"{fee_preview}\n\n"
+                    "====================\n"
+                    f"📄 計畫書預覽（前段）：\n{plan_intro}\n"
+                    "====================\n"
+                    f"⬇️ 點此下載完整 Word 檔：\n{download_url}"
+                    f"{drive_msg}"
+                )
+                return {
+                    "reply_text": reply_msg,
+                    "state": state,
+                    "user_id": user_id
+                }
+            except Exception as pe:
+                logger.error(f"Error generating plan in api_chat: {pe}")
+
+    # Intercept calendar sync & confirmation keywords
+    cal_kws = ["建立行事曆", "同步行事曆", "排入行事曆", "新增行事曆", "同步日曆", "排入日曆", "建立行程", "排行程", "新增行程"]
+    confirm_kws = ["確認建立", "【確認建立】", "確認", "確定", "好", "可以", "寫入日曆"]
+    
+    state = load_session(user_id)
+    is_confirm = user_text in confirm_kws or any(user_text == f"【{kw}】" for kw in confirm_kws)
+    is_cal_req = user_text in cal_kws or any(user_text == f"【{kw}】" for kw in cal_kws)
+    
+    if is_confirm and state and state.get("pending_calendar_confirm"):
+        try:
+            from core.calendar_helper import sync_to_calendar
+            sync_res = sync_to_calendar(state)
+            state["pending_calendar_confirm"] = False
+            from core.chatbot import save_session
+            save_session(user_id, state)
+            if sync_res and sync_res.get("success"):
+                event_link = sync_res.get("link", "")
+                link_msg = f"\n👉 點此開啟 Google 日曆行程：\n{event_link}" if event_link else ""
+                reply_msg = f"✨ 已成功為您正式建立行程！\n📌 行程名稱：【{state.get('name')}】\n📅 時間：{state.get('visitDate')} {state.get('visitTime', '09:00')}\n已成功同步至 Google 日曆與本機！{link_msg}"
+            else:
+                err_detail = sync_res.get("error", "請檢查日曆授權") if sync_res else "請檢查授權"
+                reply_msg = f"⚠️ 行事曆建立提示：{err_detail}"
+            return {
+                "reply_text": reply_msg,
+                "state": state,
+                "user_id": user_id
+            }
+        except Exception as ce:
+            logger.error(f"Error syncing calendar from api_chat: {ce}")
+
+    if is_cal_req:
+        if state and state.get("name") and state.get("name") != "未提供資料":
+            state["pending_calendar_confirm"] = True
+            from core.chatbot import save_session
+            save_session(user_id, state)
+            reply_msg = (
+                f"📋 【行事曆建立前確認】\n"
+                f"即將為您建立以下行程至 Google 日曆與本機日曆：\n"
+                f"• 📌 行程名稱：【{state.get('name')}】\n"
+                f"• 📅 訪視日期：{state.get('visitDate', '未指定')}\n"
+                f"• ⏰ 訪視時間：{state.get('visitTime', '09:00')}\n\n"
+                f"👉 請核對上述資訊，若確認無誤，請回覆「【確認建立】」或「確認」即可正式寫入日曆！\n"
+                f"（若資訊有誤或需要修改時間，請直接告訴我，例如：「改到明天下午3點」）"
+            )
+            return {
+                "reply_text": reply_msg,
+                "state": state,
+                "user_id": user_id
+            }
+
+    # Intercept delta analysis / history comparison keywords
+    delta_kws = ["前後次對比摘要", "歷史對比", "比對上次", "差異分析", "紀錄對比", "歷史紀錄比對", "歷史差異", "前後次對比"]
+    if user_text in delta_kws or any(user_text == f"【{kw}】" for kw in delta_kws):
+        state = load_session(user_id)
+        case_name = state.get("name", "未提供資料")
+        if state and case_name != "未提供資料":
+            try:
+                from core.drive_helper import get_latest_case_plan_from_drive, analyze_case_delta_with_ai
+                prev_plan_text = get_latest_case_plan_from_drive(case_name)
+                delta_info = analyze_case_delta_with_ai(prev_plan_text, state)
+                delta_analysis = delta_info.get("delta_analysis", "無前次對比紀錄。")
+                last_problems = delta_info.get("last_problems", "前次無特殊問題點。")
+                
+                reply_msg = (
+                    f"🔍 **個案【{case_name}】前後次家訪紀錄 AI 差異比對**\n\n"
+                    f"====================\n"
+                    f"📋 **前次紀錄摘要/問題點**：\n{last_problems}\n\n"
+                    f"💡 **本次與前次核心差異與重點關注**：\n{delta_analysis}\n"
+                    f"===================="
+                )
+                return {
+                    "reply_text": reply_msg,
+                    "state": state,
+                    "user_id": user_id
+                }
+            except Exception as de_err:
+                logger.error(f"Error in delta comparison handler: {de_err}")
+                return {
+                    "reply_text": f"⚠️ 比對歷史紀錄時發生錯誤：{de_err}",
+                    "state": state,
+                    "user_id": user_id
+                }
+        
+    # Fast-Path Calendar Pre-Check for Chat (0 Token, 1ms response)
+    # Skip Fast-Path if the input is a long care plan assessment note/document to allow care plan generation
+    is_care_plan_doc = len(user_text) > 80 or any(kw in user_text for kw in [
+        "個案狀況摘要", "照護計畫", "家庭資源", "問題清單", "評估日", "CMS等級", 
+        "產出計畫", "照護計畫家訪", "家庭照顧者", "社會資源", "特別留意之處", "一、", "二、", "三、", "四、"
+    ])
+    if not is_care_plan_doc:
+        try:
+            from core.parser import parse_calendar_event_input
+            from core.chatbot import save_session
+            cal_fast_res = parse_calendar_event_input(user_text)
+            if isinstance(cal_fast_res, dict) and not cal_fast_res.get("needs_confirmation", True):
+                events = cal_fast_res.get("events", [])
+                if events:
+                    ev0 = events[0]
+                    state = load_session(user_id)
+                    summary_name = ev0.get("summary", "行程")
+                    start_dt = ev0.get("start_time", "")
+                    plan_type = ev0.get("plan_type", "AA01")
+                    
+                    if summary_name and summary_name != "行程":
+                        m_name = re.search(r'個案(?:姓名)?[：:]\s*([^\s\n\r,，\(（]+)', user_text)
+                        if m_name:
+                            state["name"] = m_name.group(1).strip()
+                        elif len(summary_name) > 15:
+                            state["name"] = summary_name.split(" ")[0][:10].strip()
+                        else:
+                            state["name"] = summary_name
+                    if start_dt and "T" in start_dt:
+                        date_part, time_part = start_dt.split("T")
+                        state["visitDate"] = date_part
+                        state["visitTime"] = time_part[:5]
+                    state["planType"] = plan_type
+                    save_session(user_id, state)
+                    
+                    type_map = {"ReEval": "複評", "AA01": "AA01", "ChuZhun": "出準", "NewCase": "新案", "Private": "私人行程"}
+                    type_str = type_map.get(plan_type, plan_type)
+                    date_display = state.get("visitDate", "")
+                    time_display = state.get("visitTime", "09:00")
+                    
+                    reply_msg = (
+                        f"⚡ 【Fast-Path 秒速解析成功】\n"
+                        f"已為您準備以下行程資料：\n"
+                        f"• 📌 對象/標題：【{state.get('name')}】\n"
+                        f"• 📅 訪視日期：{date_display}\n"
+                        f"• ⏰ 訪視時間：{time_display}\n"
+                        f"• 📋 家訪類型：{type_str}\n\n"
+                        f"👉 請回覆「建立行事曆」或點擊上方「📅 排入行事曆」即可寫入 Google 日曆！"
+                    )
+                    return {
+                        "reply_text": reply_msg,
+                        "state": state,
+                        "user_id": user_id
+                    }
+        except Exception as fpe:
+            logger.error(f"Error in fast path chat check: {fpe}")
+
+    try:
+        reply_msg = process_chat(user_id, user_text, gemini_api_key)
+        updated_state = load_session(user_id)
+        return {
+            "reply_text": reply_msg,
+            "state": updated_state,
+            "user_id": user_id
+        }
+    except Exception as e:
+        logger.error(f"Error in /api/chat: {e}")
+        err_str = str(e)
+        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str:
+            reply_msg = "⚠️ 系統提示：您設定的 Gemini API 金鑰無效（正確的金鑰通常為 AIzaSy... 開頭）。\n👉 請前往 Google AI Studio (https://aistudio.google.com) 免費申請金鑰，並點擊右上角「⚙️ 系統設定」重新貼上即可！"
+        else:
+            reply_msg = f"對話處理發生錯誤：{err_str}"
+            
+        return {
+            "reply_text": reply_msg,
+            "state": load_session(user_id),
+            "error": err_str
+        }
+
+@app.get("/api/chat/session")
+def get_chat_session(user_id: Optional[str] = None):
+    uid = user_id or database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID") or "default_user"
+    state = load_session(uid)
+    rules = load_rules(uid)
+    return {"user_id": uid, "state": state, "rules": rules}
+
+class StateSyncRequest(BaseModel):
+    state: dict
+    user_id: Optional[str] = None
+
+@app.post("/api/chat/state")
+def sync_chat_state(req: StateSyncRequest):
+    from core.chatbot import save_session
+    uid = req.user_id or database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID") or "default_user"
+    save_session(uid, req.state)
+    return {"success": True, "state": req.state}
+
+@app.post("/api/chat/reset")
+def reset_chat_session(user_id: Optional[str] = None):
+    uid = user_id or database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID") or "default_user"
+    clear_session(uid)
+    return {"success": True, "user_id": uid, "state": load_session(uid)}
+
+@app.get("/api/cases")
+def list_available_cases():
+    from core.chatbot import SESSION_DIR, mongo_db
+    import os
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    cases = set()
+    
+    from core.drive_helper import is_valid_real_case_name
+    
+    # Read local json cases
+    for f in os.listdir(SESSION_DIR):
+        if f.endswith(".json"):
+            name = f[:-5]
+            if is_valid_real_case_name(name):
+                try:
+                    with open(os.path.join(SESSION_DIR, f), "r", encoding="utf-8") as f_h:
+                        s_data = json.load(f_h)
+                        if s_data.get("planType") == "Private":
+                            continue
+                except Exception:
+                    pass
+                cases.add(name)
+                 
+    # Read MongoDB cases if available
+    if mongo_db is not None:
+        try:
+            docs = mongo_db.get_collection("sessions").find({"user_id": {"$regex": "^case_"}})
+            for doc in docs:
+                name = doc["user_id"].replace("case_", "")
+                if is_valid_real_case_name(name):
+                    cases.add(name)
+        except Exception as e:
+            logger.error(f"Error querying cases from MongoDB in /api/cases: {e}")
+            
+    # Also include SQLite cases
+    try:
+        conn = database.get_db_connection()
+        rows = conn.execute("SELECT name FROM cases").fetchall()
+        conn.close()
+        for r in rows:
+            if r["name"] and is_valid_real_case_name(r["name"]):
+                cases.add(r["name"])
+    except Exception as sq_err:
+        logger.error(f"Error querying cases from SQLite in /api/cases: {sq_err}")
+        
+    # Also include Google Drive cases from user's shared folder
+    try:
+        from core.drive_helper import list_drive_case_names
+        drive_cases = list_drive_case_names()
+        for dc in drive_cases:
+            if is_valid_real_case_name(dc):
+                cases.add(dc)
+    except Exception as drv_err:
+        logger.error(f"Error querying cases from Google Drive in /api/cases: {drv_err}")
+        
+    return {"cases": sorted(list(cases))}
+
+@app.post("/api/cases/load")
+def load_case_by_name(req: CaseLoadRequest):
+    from core.chatbot import load_session_by_name, save_session
+    uid = req.user_id or database.get_setting("line_authorized_user_id") or os.environ.get("LINE_AUTHORIZED_USER_ID") or "default_user"
+    loaded_state = load_session_by_name(req.name)
+    if loaded_state:
+        save_session(uid, loaded_state)
+        return {"success": True, "name": req.name, "state": loaded_state}
+    else:
+        return {"success": False, "error": f"找不到個案「{req.name}」的資料。"}
+
+@app.post("/api/cases/clear-all")
+def clear_all_test_cases():
+    """
+    Clears all local test case records from SQLite database and sessions directory.
+    """
+    from core.chatbot import SESSION_DIR
+    cleared_count = 0
+    try:
+        conn = database.get_db_connection()
+        conn.execute("DELETE FROM cases;")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error clearing cases table: {e}")
+        
+    if os.path.exists(SESSION_DIR):
+        for f in os.listdir(SESSION_DIR):
+            if f.endswith(".json") and f != "default_user.json":
+                try:
+                    os.remove(os.path.join(SESSION_DIR, f))
+                    cleared_count += 1
+                except Exception:
+                    pass
+                    
+    return {"success": True, "message": f"已成功清除 {cleared_count} 個測試個案資料。"}
+
+# --- AUTO-UPDATER ENDPOINTS ---
+
+@app.get("/api/system/version")
+def get_system_version():
+    vfile = os.path.join(PROJECT_ROOT, "version.json")
+    if os.path.exists(vfile):
+        try:
+            with open(vfile, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"version": "1.0.0", "release_date": "2026-08-14", "changelog": "初始化版本"}
+
+@app.get("/api/system/check-update")
+def check_system_update():
+    vfile = os.path.join(PROJECT_ROOT, "version.json")
+    current_ver = "1.0.0"
+    if os.path.exists(vfile):
+        try:
+            with open(vfile, "r", encoding="utf-8") as f:
+                current_ver = json.load(f).get("version", "1.0.0")
+        except Exception:
+            pass
+            
+    remote_url = database.get_setting("update_manifest_url") or "https://raw.githubusercontent.com/yuweitang1219/CMS/main/version.json"
+    try:
+        res = requests.get(remote_url, timeout=3)
+        if res.status_code == 200:
+            remote_data = res.json()
+            remote_ver = remote_data.get("version", "1.0.0")
+            has_update = (remote_ver != current_ver)
+            return {
+                "has_update": has_update,
+                "current_version": current_ver,
+                "latest_version": remote_ver,
+                "release_date": remote_data.get("release_date", ""),
+                "changelog": remote_data.get("changelog", ""),
+                "download_url": remote_data.get("download_url", "")
+            }
+    except Exception as e:
+        logger.info(f"Update check info: {e}")
+
+    return {
+        "has_update": False,
+        "current_version": current_ver,
+        "latest_version": current_ver,
+        "changelog": "您目前使用的是最新版本！"
+    }
+
+class ApplyUpdateRequest(BaseModel):
+    download_url: Optional[str] = None
+
+@app.post("/api/system/apply-update")
+def apply_system_update(req: ApplyUpdateRequest):
+    url = req.download_url
+    if not url:
+        return {"success": False, "error": "未提供更新檔案下載網址。"}
+        
+    try:
+        import zipfile
+        import io
+        r = requests.get(url, timeout=30)
+        if r.status_code == 200:
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            protected = ["dashboard.db", "case_management.db", ".env", "data/", "sessions/"]
+            for file_info in z.infolist():
+                if any(p in file_info.filename for p in protected):
+                    continue
+                z.extract(file_info, PROJECT_ROOT)
+            return {"success": True, "message": "系統更新成功！軟體已升級至最新版本。"}
+        else:
+            return {"success": False, "error": f"下載更新檔失敗 (HTTP {r.status_code})"}
+    except Exception as e:
+        return {"success": False, "error": f"更新失敗: {str(e)}"}
+
+@app.get("/manifest.json")
+def get_manifest():
+    return FileResponse("static/manifest.json", media_type="application/json")
+
 # --- STATIC FILE ROUTING ---
 
 @app.get("/")
 def get_index():
     return FileResponse("static/index.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
+
+@app.get("/tablet")
+def get_tablet():
+    return FileResponse("static/tablet.html", headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"})
 
 @app.get("/styles.css")
 def get_css():

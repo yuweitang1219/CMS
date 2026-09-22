@@ -1,9 +1,159 @@
 import io
 import os
 import json
-from googleapiclient.http import MediaIoBaseUpload
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
+try:
+    from googleapiclient.http import MediaIoBaseUpload
+    from googleapiclient.discovery import build
+    from google.oauth2 import service_account
+except Exception:
+    MediaIoBaseUpload = None
+    build = None
+    service_account = None
+
+def _create_or_update_drive_plan(service, folder_id, doc_title, html_content):
+    """
+    Checks if a document with doc_title already exists in target folder_id.
+    If it exists (same date, name, and plan type), update/overwrite the existing file.
+    If multiple duplicates exist, update the first and clean up the rest.
+    If it doesn't exist, create a new document.
+    """
+    escaped_title = doc_title.replace("'", "\\'")
+    query = f"'{folder_id}' in parents and name = '{escaped_title}' and trashed = false"
+    
+    fh = io.BytesIO(html_content.encode('utf-8'))
+    media = MediaIoBaseUpload(fh, mimetype='text/html', resumable=True)
+    
+    try:
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get('files', [])
+    except Exception as q_err:
+        print(f"Warning: Failed to list existing files for overwrite check: {q_err}")
+        files = []
+
+    if files:
+        target_id = files[0]['id']
+        print(f"Overwriting existing Google Drive file (Same Title/Date): {doc_title} (ID: {target_id})")
+        file = service.files().update(
+            fileId=target_id,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        
+        # Clean up extra duplicate files with the exact same name if any exist
+        for dup in files[1:]:
+            try:
+                service.files().delete(fileId=dup['id']).execute()
+                print(f"Removed extra duplicate file ID: {dup['id']}")
+            except Exception as de:
+                print(f"Warning removing duplicate file: {de}")
+                
+        return file
+    else:
+        file_metadata = {
+            'name': doc_title,
+            'mimeType': 'application/vnd.google-apps.document',
+            'parents': [folder_id]
+        }
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        print(f"Created new Google Drive file: {doc_title} (ID: {file.get('id') if file else 'None'})")
+        return file
+
+def is_valid_real_case_name(name):
+    if not name or len(name) < 2:
+        return False
+    name_str = str(name).strip()
+    if '測試' in name_str or 'test' in name_str.lower() or 'demo' in name_str.lower():
+        return False
+    if '個案' in name_str:
+        return False
+    if name_str.startswith('U') and len(name_str) > 20:
+        return False
+    if name_str.startswith('rules_'):
+        return False
+    if name_str in ['default_user', 'user', 'guest', '張三', '李四', '王五', 'test_user', '張大明', '張福氣', '陳阿嬤', '李小美', '未提供資料', '張小明', '李小華', '王大同', '趙六', '陳大明']:
+        return False
+    private_keywords = [
+        '上課', '工作時段安排', '值班', '開會', '請假', '休假', '私事', '去衛生局', 
+        '私人行程', '開會休假', '看診', '拜訪', '會議', '聚餐', '出差', '訓練',
+        '跨專業', '聯繫會議', 'AB聯繫會議', '系統紀錄'
+    ]
+    if name_str in private_keywords:
+        return False
+    for kw in ['上課', '值班', '請假', '休假', '私人行程', '工作時段', '會議', '開會', '跨專業', '訓練']:
+        if kw in name_str:
+            return False
+    return True
+
+def list_drive_case_names():
+    """
+    Lists all case document titles stored in the user's Google Drive shared folder,
+    including cases.json and Google Docs files, excluding test placeholders.
+    """
+    import database
+    import re
+    folder_id = database.get_setting("google_drive_folder_id") or os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    if not folder_id:
+        return []
+        
+    service = None
+    try:
+        from core.calendar_helper import get_oauth_drive_service
+        service = get_oauth_drive_service()
+    except Exception:
+        pass
+        
+    if not service:
+        service_account_json_str = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or database.get_setting("google_service_account_json")
+        if service_account_json_str:
+            try:
+                service_account_info = json.loads(service_account_json_str)
+                SCOPES = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/drive']
+                credentials = service_account.Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+                service = build('drive', 'v3', credentials=credentials)
+            except Exception:
+                pass
+                
+    if not service:
+        return []
+        
+    try:
+        query = f"'{folder_id}' in parents and trashed = false"
+        results = service.files().list(q=query, fields="files(id, name, mimeType)").execute()
+        files = results.get('files', [])
+        
+        extracted_names = set()
+        for f in files:
+            fname = f.get('name', '')
+            if fname == 'cases.json':
+                try:
+                    content = service.files().get_media(fileId=f['id']).execute()
+                    data = json.loads(content.decode('utf-8'))
+                    for item in data:
+                        cname = item.get('name', '').strip()
+                        if is_valid_real_case_name(cname):
+                            extracted_names.add(cname)
+                except Exception as c_err:
+                    print(f"Error reading cases.json from Drive: {c_err}")
+            else:
+                parts = fname.strip().split()
+                if len(parts) >= 2:
+                    raw_name = parts[1]
+                    clean_name = re.sub(r'\(.*?\)', '', raw_name).strip()
+                    if is_valid_real_case_name(clean_name):
+                        extracted_names.add(clean_name)
+                elif len(parts) == 1 and not parts[0].isdigit() and not parts[0].endswith('.json'):
+                    clean_name = re.sub(r'\(.*?\)', '', parts[0]).strip()
+                    if is_valid_real_case_name(clean_name):
+                        extracted_names.add(clean_name)
+                        
+        return sorted(list(extracted_names))
+    except Exception as e:
+        print(f"Error querying cases from Google Drive: {e}")
+        return []
 
 def upload_plan_to_drive(state, plan_text):
     """
@@ -102,23 +252,16 @@ def upload_plan_to_drive(state, plan_text):
     </html>
     """
     
-    # 5. Define Google Drive file metadata
-    file_metadata = {
-        'name': doc_title,
-        'mimeType': 'application/vnd.google-apps.document',  # Directs Google Drive to convert HTML to Google Doc format
-        'parents': [folder_id]
-    }
-    
     try:
-        # 6. Upload the file to Google Drive
-        fh = io.BytesIO(html_content.encode('utf-8'))
-        media = MediaIoBaseUpload(fh, mimetype='text/html', resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+        # 5 & 6. Upload or Overwrite the file in Google Drive
+        file = _create_or_update_drive_plan(service, folder_id, doc_title, html_content)
+        if not file:
+            return {"success": False, "error": "建立 Google Drive 檔案失敗（未回傳有效檔案）"}
         
         file_id = file.get('id')
         web_link = file.get('webViewLink')
         
-        print(f"File uploaded successfully to Google Drive. ID: {file_id}, Link: {web_link}")
+        print(f"File processed successfully in Google Drive. ID: {file_id}, Link: {web_link}")
         
         # 7. Transfer ownership to the user's primary email if configured (to prevent service account quota issues)
         user_email = database.get_setting("google_user_email") or os.environ.get("GOOGLE_USER_EMAIL")
@@ -184,11 +327,10 @@ def upload_plan_to_drive(state, plan_text):
                     database.set_setting("google_drive_folder_id", healed_folder_id)
                     print(f"Auto-heal: Updated settings database with new folder ID: {healed_folder_id}")
                     
-                    # Update file metadata and retry creation once!
-                    file_metadata['parents'] = [healed_folder_id]
-                    fh = io.BytesIO(html_content.encode('utf-8'))
-                    media = MediaIoBaseUpload(fh, mimetype='text/html', resumable=True)
-                    file = service.files().create(body=file_metadata, media_body=media, fields='id, webViewLink').execute()
+                    # Update file metadata and retry creation/overwrite once!
+                    file = _create_or_update_drive_plan(service, healed_folder_id, doc_title, html_content)
+                    if not file:
+                        return {"success": False, "error": "自動修復建立 Google Drive 檔案失敗（未回傳有效檔案）"}
                     
                     file_id = file.get('id')
                     web_link = file.get('webViewLink')
@@ -365,7 +507,7 @@ def analyze_case_delta_with_ai(prev_plan_text, current_state):
 JSON 必須格式正確，不要加上 Markdown 程式碼區塊標記。
 """
         response = None
-        MODELS_TO_TRY = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-flash-latest']
+        MODELS_TO_TRY = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']
         for model_name in MODELS_TO_TRY:
             try:
                 model = genai.GenerativeModel(model_name)

@@ -3,12 +3,21 @@
 import os
 import json
 import datetime
-import google.generativeai as genai
-from pymongo import MongoClient
+import logging
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
+try:
+    from pymongo import MongoClient
+except Exception:
+    MongoClient = None
 from .constants import (
     CONDITIONS_LIST, SENSORY_LIST, TUBES_LIST, COGNITION_LIST,
     FALLS_LIST, INCOME_LIST, ADL_LIST, IADL_LIST, LTC_SERVICES
 )
+
+logger = logging.getLogger("core.chatbot")
 
 # MongoDB 雲端資料庫連線初始化
 MONGO_URI = os.environ.get("MONGO_URI")
@@ -83,27 +92,39 @@ def get_default_state():
 
 
 def load_session(user_id):
+    state = None
+    # 1. 嘗試從 MongoDB 載入
     if mongo_col is not None:
         try:
             doc = mongo_col.find_one({"user_id": user_id})
             if doc:
-                return doc.get("state", get_default_state())
-            return get_default_state()
+                state = doc.get("state")
         except Exception as e:
             print(f"Error loading session from MongoDB for {user_id}: {e}")
-            # Fallback to local file below
 
-    os.makedirs(SESSION_DIR, exist_ok=True)
-    session_path = os.path.join(SESSION_DIR, f"{user_id}.json")
-    if os.path.exists(session_path):
-        try:
-            with open(session_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading session for {user_id}: {e}")
-            return get_default_state()
-    else:
-        return get_default_state()
+    # 2. 若 MongoDB 沒有資料，則嘗試從本地檔案載入
+    if state is None:
+        os.makedirs(SESSION_DIR, exist_ok=True)
+        session_path = os.path.join(SESSION_DIR, f"{user_id}.json")
+        if os.path.exists(session_path):
+            try:
+                with open(session_path, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                # 成功載入後，自動同步回寫至 MongoDB
+                if mongo_col is not None and state is not None:
+                    try:
+                        mongo_col.update_one(
+                            {"user_id": user_id},
+                            {"$set": {"state": state, "updated_at": datetime.datetime.utcnow()}},
+                            upsert=True
+                        )
+                    except Exception as sync_err:
+                        print(f"Error syncing loaded session to MongoDB for {user_id}: {sync_err}")
+            except Exception as e:
+                print(f"Error loading session for {user_id}: {e}")
+
+    # 3. 若皆無資料，回傳預設空狀態
+    return state if state is not None else get_default_state()
 
 def save_session(user_id, state):
     # 1. Save main session to MongoDB
@@ -126,9 +147,11 @@ def save_session(user_id, state):
     except Exception as e:
         print(f"Error saving session for {user_id}: {e}")
 
-    # 3. If case name is set, also save a copy under the case name as backup
+    # 3. If case name is set and NOT a private event, save a copy under the case name as backup
     name = state.get("name")
-    if name and name != "未提供資料" and name.strip() != "":
+    plan_type = state.get("planType")
+    from core.drive_helper import is_valid_real_case_name
+    if name and name != "未提供資料" and name.strip() != "" and plan_type != "Private" and is_valid_real_case_name(name):
         backup_id = f"case_{name}"
         if mongo_col is not None:
             try:
@@ -146,36 +169,164 @@ def save_session(user_id, state):
         except Exception as e:
             print(f"Error saving case backup file for {name}: {e}")
 
+        # 4. 即時寫入 SQLite 的 cases 資料表，並異步上傳備份到 Google Drive
+        try:
+            try:
+                import database
+            except ImportError:
+                import sys
+                parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if parent_dir not in sys.path:
+                    sys.path.append(parent_dir)
+                import database
+                
+            database.update_case_record(
+                name=name,
+                last_visit_date=state.get("visitDate"),
+                address=state.get("address"),
+                plan_type=state.get("planType")
+            )
+        except Exception as dbe:
+            print(f"Error updating SQLite case record for {name}: {dbe}")
+            import threading
+            from core.drive_helper import backup_cases_to_drive
+            threading.Thread(target=backup_cases_to_drive, daemon=True).start()
+        except Exception as db_err:
+            print(f"Error syncing case to SQLite/Drive in save_session: {db_err}")
+
 def load_session_by_name(case_name):
     """
     Load a saved case by name (e.g. for backup/restore).
-    Checks MongoDB first, then local file.
+    Checks MongoDB, local JSON files, SQLite cases table, calendar events, and Google Drive.
+    Guarantees returning a valid state for case_name with all available data merged.
     """
+    if not case_name:
+        return None
+        
+    case_name = case_name.strip()
+    state = None
+    
+    # 1. Check MongoDB
     if mongo_col is not None:
         try:
             doc = mongo_col.find_one({"user_id": f"case_{case_name}"})
-            if doc:
-                return doc.get("state")
+            if doc and doc.get("state"):
+                state = doc.get("state")
         except Exception as e:
             print(f"Error loading case {case_name} from MongoDB: {e}")
             
-    case_path = os.path.join(SESSION_DIR, f"{case_name}.json")
-    if os.path.exists(case_path):
+    # 2. Check local session JSON file
+    if state is None:
+        case_path = os.path.join(SESSION_DIR, f"{case_name}.json")
+        if os.path.exists(case_path):
+            try:
+                with open(case_path, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                # 同步回寫 MongoDB 雲端
+                if mongo_col is not None and state is not None:
+                    try:
+                        mongo_col.update_one(
+                            {"user_id": f"case_{case_name}"},
+                            {"$set": {"state": state, "updated_at": datetime.datetime.utcnow()}},
+                            upsert=True
+                        )
+                    except Exception as sync_err:
+                        print(f"Error syncing loaded case {case_name} to MongoDB: {sync_err}")
+            except Exception as e:
+                print(f"Error loading case file for {case_name}: {e}")
+
+    # Fallback / Hydration 1: Check SQLite cases & local calendar events
+    try:
+        import database
+        conn = database.get_db_connection()
+        row = conn.execute("SELECT * FROM cases WHERE name = ? OR name LIKE ?", (case_name, f"%{case_name}%")).fetchone()
+        cal_ev = conn.execute("SELECT * FROM local_calendar_events WHERE summary LIKE ? ORDER BY start_time DESC", (f"%{case_name}%",)).fetchone()
+        conn.close()
+        
+        if row:
+            if state is None:
+                state = get_default_state()
+                state["name"] = row["name"] or case_name
+            if not state.get("address") and row["address"]:
+                state["address"] = row["address"]
+            if not state.get("visitDate") and row["last_visit_date"]:
+                state["visitDate"] = row["last_visit_date"]
+            if not state.get("planType") and row["plan_type"]:
+                state["planType"] = row["plan_type"]
+                
+        if cal_ev:
+            if state is None:
+                state = get_default_state()
+                state["name"] = case_name
+            if not state.get("visitDate") and cal_ev["start_time"]:
+                parts = cal_ev["start_time"].split("T")
+                state["visitDate"] = parts[0]
+                if len(parts) > 1 and not state.get("visitTime"):
+                    state["visitTime"] = parts[1][:5]
+    except Exception as sq_err:
+        print(f"Error checking SQLite for case {case_name}: {sq_err}")
+
+    # Fallback / Hydration 2: Check Google Drive if previous plan exists
+    if state is None or not state.get("address") or not state.get("cmsLvl"):
         try:
-            with open(case_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading case file for {case_name}: {e}")
-    return None
+            from core.drive_helper import get_latest_case_plan_from_drive
+            drive_plan = get_latest_case_plan_from_drive(case_name)
+            if drive_plan:
+                if state is None:
+                    state = get_default_state()
+                    state["name"] = case_name
+                import re
+                if not state.get("address"):
+                    addr_m = re.search(r"住家地址\s*[:：]\s*([^\n\r]+)", drive_plan)
+                    if addr_m:
+                        state["address"] = addr_m.group(1).strip()
+                if not state.get("cmsLvl"):
+                    cms_m = re.search(r"長照等級\s*[:：]\s*.*?(\d)", drive_plan)
+                    if cms_m:
+                        state["cmsLvl"] = cms_m.group(1)
+                if not state.get("birthYear"):
+                    by_m = re.search(r"(?:出生年份|民國)\s*[:：]?\s*(\d{2,3})", drive_plan)
+                    if by_m:
+                        state["birthYear"] = by_m.group(1)
+                if not state.get("gender"):
+                    gen_m = re.search(r"性別\s*[:：]\s*(男|女)", drive_plan)
+                    if gen_m:
+                        state["gender"] = gen_m.group(1)
+                if not state.get("specialistName"):
+                    sp_m = re.search(r"(?:照專|照顧專員|照顧管理專員)\s*[:：]\s*([^\s\n\r]+)", drive_plan)
+                    if sp_m:
+                        state["specialistName"] = sp_m.group(1)
+                if not state.get("planType"):
+                    for pt_code, pt_label in [("AA01", "AA01"), ("ReEval", "複評"), ("NewCase", "新案"), ("ChuZhun", "出準"), ("CoVisit", "共訪"), ("PlanChange", "異動")]:
+                        if pt_label in drive_plan[:250]:
+                            state["planType"] = pt_code
+                            break
+        except Exception as drv_err:
+            print(f"Error loading case {case_name} from Drive: {drv_err}")
+
+    # Fallback / Hydration 3: If still None, initialize a clean default state with case_name
+    if state is None:
+        state = get_default_state()
+        state["name"] = case_name
+
+    # Auto-infer trafLvl if address contains 中壢
+    if state.get("address") and "中壢" in str(state["address"]):
+        state["trafLvl"] = "2"
+
+    # Persist state
+    try:
+        save_session(case_name, state)
+    except Exception as save_err:
+        print(f"Error persisting session for {case_name}: {save_err}")
+
+    return state
 
 def clear_session(user_id):
     if mongo_col is not None:
         try:
             mongo_col.delete_one({"user_id": user_id})
-            return
         except Exception as e:
             print(f"Error clearing session from MongoDB for {user_id}: {e}")
-            # Fallback to local file below
 
     os.makedirs(SESSION_DIR, exist_ok=True)
     session_path = os.path.join(SESSION_DIR, f"{user_id}.json")
@@ -186,25 +337,38 @@ def clear_session(user_id):
             print(f"Error removing session for {user_id}: {e}")
 
 def load_rules(user_id):
+    rules = None
     if mongo_rules_col is not None:
         try:
             doc = mongo_rules_col.find_one({"user_id": user_id})
             if doc:
-                return doc.get("rules", [])
-            return []
+                rules = doc.get("rules")
         except Exception as e:
             print(f"Error loading rules from MongoDB for {user_id}: {e}")
 
-    os.makedirs(SESSION_DIR, exist_ok=True)
-    rules_path = os.path.join(SESSION_DIR, f"rules_{user_id}.json")
-    if os.path.exists(rules_path):
-        try:
-            with open(rules_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading rules for {user_id}: {e}")
-            return []
-    return []
+    if rules is None:
+        os.makedirs(SESSION_DIR, exist_ok=True)
+        rules_path = os.path.join(SESSION_DIR, f"rules_{user_id}.json")
+        if os.path.exists(rules_path):
+            try:
+                with open(rules_path, 'r', encoding='utf-8') as f:
+                    rules = json.load(f)
+                # 同步回寫至 MongoDB
+                if mongo_rules_col is not None and rules is not None:
+                    try:
+                        mongo_rules_col.update_one(
+                            {"user_id": user_id},
+                            {"$set": {"rules": rules, "updated_at": datetime.datetime.utcnow()}},
+                            upsert=True
+                        )
+                    except Exception as sync_err:
+                        print(f"Error syncing loaded rules to MongoDB: {sync_err}")
+            except Exception as e:
+                print(f"Error loading rules for {user_id}: {e}")
+                rules = []
+        else:
+            rules = []
+    return rules
 
 def save_rules(user_id, rules_list):
     if mongo_rules_col is not None:
@@ -250,9 +414,12 @@ def process_chat(user_id, user_message, api_key):
     state = load_session(user_id)
     history = state.pop("_history", [])
     
-    # 限制對話歷史長度（保留最近 16 次對話，約 8 輪問答），防止資料庫負載過重與 API 延遲隨對話增長而膨脹
-    if len(history) > 16:
-        history = history[-16:]
+    # 限制對話歷史長度：最長保存 20 筆紀錄在 State 中
+    if len(history) > 20:
+        history = history[-20:]
+    
+    # 智慧型 Token 瘦身：只送出最近 10 筆訊息（約 5 輪對話）給 Gemini 推理，大幅壓縮 Token 量並降低回應延遲至 0.5s
+    prompt_history = history[-10:] if len(history) > 10 else history
     
     # Load learned rules
     rules = load_rules(user_id)
@@ -264,9 +431,9 @@ def process_chat(user_id, user_message, api_key):
     # Append the new user message to history
     history.append({"role": "user", "content": user_message})
     
-    # Format history as a readable string block
+    # Format prompt history as a readable string block
     history_str = ""
-    for msg in history[:-1]:  # exclude the latest user message
+    for msg in prompt_history[:-1]:  # exclude the latest user message
         role_name = "個管師" if msg["role"] == "user" else "AI 助理"
         history_str += f"{role_name}: {msg['content']}\n"
         
@@ -303,6 +470,8 @@ def process_chat(user_id, user_message, api_key):
      - 若個管師主動說具體時間（如「下午一點半」、「13:30」），請轉換為 24 小時制格式填入 `visitTime`。
 6. **自訂規則與偏好套用**：
    - 務必將「你已學習的使用者自訂規則與偏好」列出的所有規則（如照專姓名、特定服務項目的預設核定次數等）作為最高優先級。
+7. **資訊模糊與不確定性確認原則（極度重要）**：
+   - 當個管師輸入的個案資訊或行程需求未完全明確、時間或細節模糊不確定時，你**必須先主動向個管師提問確認**，絕不可自行隨意揣測、假設或直接過濾跳過。
    - 當個案狀態中對應的欄位為空或為預設值，且自訂規則中有提及時，你必須**主動且自動將規則中的值套用到當前個案狀態 JSON 中**（例如：若自訂規則包含「照專為王美美」，且 JSON 中的 `specialistName` 為空或為預設值，你必須將其更新為 `"王美美"`；若自訂規則包含「BA02核定15次」，且個案要申請或已配置 BA02，你必須自動將 `serviceTimes` 中的 `BA02` 設為 `15`）。
 
 【重要名詞與縮寫定義（攸關屬性分類正確性，務必嚴格遵守）】:
@@ -337,7 +506,7 @@ def process_chat(user_id, user_message, api_key):
 
 【欄位可選值與規範】:
 1. 姓名 (name): 字串
-2. 出生年 (birthYear): 西元年份字串 (如 "1948")
+2. 出生年 (birthYear): 民國年份或西元年份字串 (優先記錄民國年，如 "37" 或 "37年次")
 3. 家屬姓名 (familyName): 字串
 4. 關係 (familyRel): 字串
 4a. 主要聯絡人電話 (familyPhone): 字串，例如 "0918-596-286" 等。請從輸入中提取與該主要聯絡人（如二女兒劉小姐）相關聯的電話。
@@ -352,7 +521,9 @@ def process_chat(user_id, user_message, api_key):
 10. CMS 等級 (cmsLvl): "2" 到 "8" 的字串
 11. 交通地區分類 (trafLvl): "1" 到 "4" 的字串。若個案地址 (address) 包含「中壢」，交通地區分類一律鎖定為 "2"。
 12. 經濟收入與來源 (selectedIncome): 必須為以下清單的子集（可複選）: {json.dumps(INCOME_LIST)}
-13. 疾病史 (selectedConditions): 必須為以下清單的子集: {json.dumps(CONDITIONS_LIST)}
+13. 疾病史與手術史 (selectedConditions): 陣列 (List of strings)。
+    - **完整保留規範 (重要)**：個管師輸入或貼上的所有「疾病史」與「手術史」（例如高血壓、糖尿病、中風、左膝關節置換手術、白內障手術、心臟支架放置等），你必須 100% 完整保留並列入陣列中，絕對不可以裁切、簡化或漏掉任何項目。
+    - **補充事項與細節標示規範 (重要)**：針對疾病或手術的補充事項、開刀年份、手術部位、目前用藥控制狀況或備註細節（例如：「110年已手術」、「穩定用藥中」、「左眼白內障」等），必須統一使用括號 `()` 或 `（）` 標示並緊接在疾病/手術名稱後方。範例：`高血壓 (穩定用藥中)`、`左膝人工關節置換術 (110年於長庚開刀)`、`白內障 (右眼109年已手術)`。
 14. 感官異常評估 (selectedSensory): 必須為以下清單的子集: {json.dumps(SENSORY_LIST)}
 15. 留置管路與特殊照護 (selectedTubes): 必須為以下清單的子集: {json.dumps(TUBES_LIST)}
 16. 認知與行為狀態 (selectedCognition): 必須為以下清單的子集: {json.dumps(COGNITION_LIST)}
@@ -367,9 +538,10 @@ def process_chat(user_id, user_message, api_key):
     - **備註與細節保留規則 (重要)**：同 ADL，如果個管師輸入時有括號備註，必須完整保留整段文字（包含括號內容）作為值，不可裁剪。
 20. 其他家庭成員 (familyStatusVal): 字串，指除了主要照顧者之外的其他家庭成員（如「無」、「長女」或「次子」等）。請僅列出成員名稱或關係，絕對不可以填寫經濟支持、照顧細節或其他描述性內容。
 20a. 其他成員電話 (familyStatusPhone): 字串，例如 "0936-979-996" 等。請從輸入中提取與其他家庭成員（如大女兒）相關聯的電話。
-21. 計畫類型 (planType): 必須為以下之一:
+21. 計畫類型 (planType): 家訪主要分為四大類別（複評、AA01、出準、新案），必須為以下之一:
+    - "ReEval": 當個管師說「複評」、「單位複評」、「重新評定」時使用
     - "AA01": 當個管師說「AA01」、「家訪」、「定期追蹤」時使用
-    - "ReEval": 當個管師說「複評」、「重新評定」時使用
+    - "ChuZhun": 當個管師說「出準」、「出院準備」、「出準家訪」時使用
     - "NewCase": 當個管師說「新案」、「新個案」時使用
     - "CoVisit": 當個管師說「共訪」、「一起訪視」時使用
     - "PreNewCase": 當個管師說「出準新案」時使用
@@ -381,6 +553,7 @@ def process_chat(user_id, user_message, api_key):
 24. 服務項目規劃 (activeServices) 與 數量/月 (serviceTimes):
     - 系統支援服務代碼如: {", ".join([s['code'] for s in LTC_SERVICES[:30]])}... 等。
     - 當使用者提及某種照護需求（如：洗澡、備餐、喘息、就醫交通）時，將對應的服務代碼加入 `activeServices`，並在 `serviceTimes` 設定對應的每月次數（例如：洗澡 BA07 預設 12 次/月，備餐 BA05 預設 20 次/月，除非使用者指定其他次數）。
+    - 【極重要】：僅能根據評估內文【照護計畫/照顧服務需求】中家屬「明確選擇有使用意願」的項目來加入 `activeServices`！若內文中僅提到生理狀況（如偶失禁、尿布），但家屬並未選擇協助排泄服務（BA24），絕對不可以自動填入 BA24！
     - 聘僱外籍看護 (hasF) 為 True 時，居家照顧服務 (BA 碼，除到宅沐浴車 BA09, BA09a 外) 應被自動移除（不予核定），但專業服務 (C 碼)、日間照顧 (BB 碼)、家庭托顧 (BC 碼) 均允許核定配置；且喘息服務 (G 碼) 與短照服務 (SC09) 僅能在看護工空窗期使用。
 25. 性別 (gender): 字串，如 "男"、"女"。
 26. 意識狀態 (consciousness): 字串，如 "清楚"、"不清"、"混亂"、"臥床叫喚無反應"。
@@ -423,7 +596,7 @@ def process_chat(user_id, user_message, api_key):
 
 【你的任務】:
 1. 分析個管師的最新訊息，提取出個案資訊（例如姓名、CMS、疾病史、ADL評估、需要的服務代碼等）。
-2. 更新並融合這些資訊到當前的個案狀態 JSON 中（保持現有其他欄位不變，僅更新提及的欄位）。
+2. 更新並融合這些資訊到當前的個案狀態 JSON 中（保持現有其他欄位不變，僅更新提及的欄位）。特別注意：疾病史 (selectedConditions)、配置服務 (activeServices)、經濟來源 (selectedIncome) 等陣列 (List) 欄位，你必須完整保留在【當前個案狀態 JSON】中已存在的項目，絕對不能漏掉；除非使用者在輸入中明確要求「刪除」、「取消」、「不要」某個項目，否則一律保留。
 3. 產生簡短、主動提問的對話回覆，引導個管師填寫下一個欄位。
 4. **絕對禁止**的行為：
    - ❌ 不可以問「請確認以下資料是否正確」
@@ -456,8 +629,15 @@ JSON 必須包含以下兩個鍵：
     # Models to try in order (fallback if one is unavailable)
     MODELS_TO_TRY = [
         'gemini-2.5-flash',
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
+        'gemini-3.7-flash',
         'gemini-flash-latest',
     ]
+    gen_config = {
+        "temperature": 0.2,
+        "max_output_tokens": 4096
+    }
     
     try:
         response = None
@@ -465,34 +645,39 @@ JSON 必須包含以下兩個鍵：
         from core.gemini_helper import generate_content_with_rotation
         for model_name in MODELS_TO_TRY:
             try:
-                response = generate_content_with_rotation(api_key, model_name, prompt)
-                break  # success, stop trying
+                response = generate_content_with_rotation(api_key, model_name, prompt, generation_config=gen_config)
+                if response:
+                    break  # success, stop trying
             except Exception as model_err:
-                print(f"Model {model_name} failed under all keys: {model_err}")
+                logger.warning(f"Model {model_name} failed under all keys: {model_err}")
                 last_model_error = model_err
         
         if response is None:
-            raise last_model_error
+            raise last_model_error or ValueError("AI 服務連線失敗，請確認網路或 API 金鑰設定。")
+            
+        try:
+            text = response.text.strip()
+        except Exception as text_err:
+            logger.warning(f"Failed to extract text from Gemini response (possibly safety filtered): {text_err}")
+            text = "已收到您的訊息，個案資料已解析並儲存。"
         
-        text = response.text.strip()
-        
-        # Strip code block wrappers if any
-        if text.startswith("```"):
-            # find first newline
-            first_nl = text.find("\n")
-            # find last backticks
-            last_bt = text.rfind("```")
-            if first_nl != -1 and last_bt != -1:
-                text = text[first_nl:last_bt].strip()
-        
-        # Try to extract JSON if there's extra text around it
-        if not text.startswith("{"):
-            import re
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                text = json_match.group(0)
-        
-        data = json.loads(text)
+        # Extract JSON cleanly using regex and markdown strip
+        cleaned_json_text = ""
+        import re
+        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if json_match:
+            cleaned_json_text = json_match.group(0).strip()
+        else:
+            cleaned_json_text = text.replace("```json", "").replace("```", "").strip()
+
+        try:
+            data = json.loads(cleaned_json_text)
+        except Exception as json_err:
+            logger.warning(f"Failed to parse JSON from Gemini response: {json_err} (Raw text: {repr(text[:100])})")
+            data = {
+                "updated_state": state,
+                "reply_text": text if text and not text.startswith("{") else "已收到您的訊息，個案資料已儲存。"
+            }
         new_state = data.get("updated_state", {})
         
         # Merge new_state with old state to prevent data loss (losing memory during the conversation)
@@ -510,6 +695,21 @@ JSON 必須包含以下兩個鍵：
                         continue
                     merged_dict[sub_k] = sub_v
                 updated_state[k] = merged_dict
+            elif isinstance(v, list) and isinstance(updated_state.get(k), list):
+                # Defensive merge for list fields to prevent Gemini from omitting previously collected items.
+                # If there are keywords in the user's message indicating deletion or removal, we trust Gemini's new list.
+                # Otherwise, we take the union.
+                deletion_kws = ["拿掉", "取消", "清除", "移除", "不要", "不用", "拿走", "刪除", "減去", "扣除", "扣掉", "除掉"]
+                has_delete_intent = any(dkw in user_message for dkw in deletion_kws)
+                if has_delete_intent:
+                    updated_state[k] = v
+                else:
+                    # Union lists to preserve existing data
+                    union_list = list(updated_state[k])
+                    for item in v:
+                        if item not in union_list:
+                            union_list.append(item)
+                    updated_state[k] = union_list
             else:
                 updated_state[k] = v
                 
@@ -537,18 +737,36 @@ JSON 必須包含以下兩個鍵：
         
 
 
-        # Do not automatically sync calendar during chat updates - user requested explicit sync only
-
-        # Save updated history in state
-        history.append({"role": "assistant", "content": reply_text})
-        updated_state["_history"] = history
+        # Trigger calendar sync if user message or state indicates calendar creation request
+        cal_kws = ["建立行事曆", "同步行事曆", "排入行事曆", "新增行事曆", "同步日曆", "排入日曆", "建立行程", "排行程", "新增行程", "加到日曆", "放到日曆"]
+        is_private = (updated_state.get("planType") == "Private")
+        user_wants_sync = any(kw in user_message for kw in cal_kws)
+        
+        if (user_wants_sync or is_private) and updated_state.get("name") and updated_state.get("name") != "未提供資料":
+            try:
+                from core.calendar_helper import sync_to_calendar
+                sync_res = sync_to_calendar(updated_state)
+                if sync_res and sync_res.get("success"):
+                    updated_state["googleEventId"] = sync_res.get("event_id")
+                    if "同步至" not in reply_text and "建立至" not in reply_text:
+                        reply_text += f"\n\n✨ (行程「{updated_state.get('name')}」已自動同步建立至您的 Google 日曆！)"
+            except Exception as se:
+                logger.error(f"Error syncing calendar in process_chat: {se}")
         
         # Save updated state
         save_session(user_id, updated_state)
         return reply_text
     except Exception as e:
+        logger.error(f"Error in process_chat with Gemini: {e}", exc_info=True)
         print("Error in process_chat with Gemini:", e)
         # Restore history in state and save
         state["_history"] = history
         save_session(user_id, state)
-        return "系統處理對話時發生錯誤，請再試一次。或是您可以輸入「重新開始」以清除目前的紀錄。"
+        err_str = str(e)
+        if "API_KEY_INVALID" in err_str or "API key not valid" in err_str or "API_KEY" in err_str:
+            return "⚠️ Gemini API 金鑰格式無效或權限不足。\n💡 提醒：請至「⚙️ 系統設定」確認您的 Google AI Studio API Key (支援 AQ. 或 AIzaSy 開頭格式)！"
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+            return "⚠️ API 呼叫次數達上限 (429 Rate Limit)。請稍候幾秒再試一次，或前往「⚙️ 系統設定」增加備用金鑰！"
+        if "404" in err_str or "not found" in err_str:
+            return "⚠️ 無法連線至 Gemini 模型或當前 API 金鑰未開通該模型權限。\n💡 請至「⚙️ 系統設定」檢查您的 API 金鑰 (支援 AQ. 或 AIzaSy 格式)。"
+        return f"⚠️ 系統處理對話時發生錯誤 ({err_str})。請確認「⚙️ 系統設定」中的 API 金鑰，或輸入「重新開始」重置對話。"

@@ -77,8 +77,74 @@ def init_db():
         )
     """)
     
+    # Create local_calendar_events table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS local_calendar_events (
+            id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            description TEXT,
+            location TEXT,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            synced_google INTEGER DEFAULT 0,
+            google_event_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
+
+def add_local_calendar_event(summary, start_time, end_time, description="", location="", google_event_id=None, synced_google=0, event_id=None):
+    import uuid
+    if not event_id:
+        event_id = f"local_{uuid.uuid4().hex[:12]}"
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """INSERT OR REPLACE INTO local_calendar_events 
+               (id, summary, description, location, start_time, end_time, synced_google, google_event_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (event_id, summary, description, location, start_time, end_time, synced_google, google_event_id)
+        )
+        conn.commit()
+        return event_id
+    finally:
+        conn.close()
+
+def get_local_calendar_events():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM local_calendar_events ORDER BY start_time ASC")
+        rows = cursor.fetchall()
+        events = []
+        for r in rows:
+            events.append({
+                "id": r["id"],
+                "summary": r["summary"],
+                "description": r["description"] or "",
+                "location": r["location"] or "",
+                "start": {"dateTime": r["start_time"]},
+                "end": {"dateTime": r["end_time"]},
+                "synced_google": bool(r["synced_google"]),
+                "google_event_id": r["google_event_id"]
+            })
+        return events
+    finally:
+        conn.close()
+
+def delete_local_calendar_event(event_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM local_calendar_events WHERE id = ? OR google_event_id = ?", (event_id, event_id))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
 
 # --- User Functions ---
 def create_user(username, password_hash):
