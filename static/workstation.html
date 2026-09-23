@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人智能生活儀表板 - 行事曆 & 待辦事項</title>
+    <title>長照個案管理智能助理</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,12 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=33.0">
-    <script>
-        if (window.location.pathname === "/" && (window.innerWidth <= 1024 || /iPad|Tablet|Android/i.test(navigator.userAgent))) {
-            window.location.replace("/tablet");
-        }
-    </script>
+    <link rel="stylesheet" href="/styles.css?v=36.0">
 </head>
 <body data-theme="light">
     
@@ -118,6 +113,9 @@
                 <button class="btn btn-secondary" onclick="openUpdateModal()" title="檢查與線上更新軟體">
                     <i class="fa-solid fa-arrows-rotate"></i> <span>程式更新</span>
                 </button>
+                <a href="/tablet" class="btn btn-secondary" title="切換至桌上行事曆看板" style="text-decoration: none;">
+                    <i class="fa-solid fa-calendar-days"></i> <span>行事曆看板</span>
+                </a>
                 <button class="btn btn-secondary btn-icon-only" onclick="openSettingsModal()" title="系統設定">
                     <i class="fa-solid fa-gear"></i>
                 </button>
@@ -907,6 +905,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=32.0"></script>
+    <script src="/app.js?v=36.0"></script>
 </body>
 </html>
