@@ -28,7 +28,7 @@
     <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Stylesheet -->
-    <link rel="stylesheet" href="/styles.css?v=36.0">
+    <link rel="stylesheet" href="/styles.css?v=37.0">
 </head>
 <body>
     
@@ -148,12 +148,13 @@
                     <!-- Mini Month Calendar -->
                     <div class="mini-calendar-container">
                         <div class="mini-calendar-header">
-                            <button onclick="changeMonth(-1)"><i class="fa-solid fa-chevron-left"></i></button>
-                            <div class="calendar-title-group">
-                                <h3 id="mini-calendar-month-year">2026年6月</h3>
+                            <button onclick="changeMonth(-1)" title="上一月"><i class="fa-solid fa-chevron-left"></i></button>
+                            <div class="calendar-title-group" style="display: flex; align-items: center; gap: 8px;">
+                                <h3 id="mini-calendar-month-year" onclick="goToToday()" style="cursor: pointer;" title="點擊回到當月/今天">2026年10月</h3>
+                                <button id="btn-calendar-today" class="btn btn-secondary btn-sm hidden" onclick="goToToday()" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; line-height: 1.2;" title="回到今日">今日</button>
                                 <span id="mini-calendar-clock" class="mini-calendar-clock hidden">00:00:00</span>
                             </div>
-                            <button onclick="changeMonth(1)"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button onclick="changeMonth(1)" title="下一月"><i class="fa-solid fa-chevron-right"></i></button>
                         </div>
                         <div class="mini-calendar-weekdays">
                             <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
@@ -416,6 +417,6 @@
     </div>
 
     <!-- Main JS logic -->
-    <script src="/app.js?v=36.0"></script>
+    <script src="/app.js?v=37.0"></script>
 </body>
 </html>

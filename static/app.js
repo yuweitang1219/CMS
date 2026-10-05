@@ -21,7 +21,12 @@ let state = {
     selectedDate: new Date(),
     currentCalendarMonth: new Date(),
     settings: null,
-    syncInterval: null
+    syncInterval: null,
+    lastLiveDateString: new Date().toDateString(),
+    lastLiveMonthKey: `${new Date().getFullYear()}-${new Date().getMonth()}`,
+    manualMonthOverride: false,
+    manualDateOverride: false,
+    lastManualActionTime: 0
 };
 
 // Page Init
@@ -33,11 +38,22 @@ document.addEventListener("DOMContentLoaded", () => {
     initClockCollapseState();
     initChatbotApp();
     
-    // Instantly sync data when the user focuses the tab or wakes up the tablet screen
+    // Instantly sync data and check auto-flip when the user focuses the tab or wakes up the tablet screen
     window.addEventListener("focus", () => {
+        checkAndAutoFlipCalendar();
         if (state.loggedIn) {
             fetchTodos(false);
             fetchEvents(false);
+        }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            checkAndAutoFlipCalendar();
+            if (state.loggedIn) {
+                fetchTodos(false);
+                fetchEvents(false);
+            }
         }
     });
 });
@@ -68,6 +84,9 @@ function startClock() {
         let date = String(now.getDate()).padStart(2, '0');
         let day = weekdays[now.getDay()];
         if (dateDisplay) dateDisplay.textContent = `${year}年${month}月${date}日 ${day}`;
+        
+        // Auto flip calendar on new day/month or inactivity timeout
+        checkAndAutoFlipCalendar();
     }
     
     updateClock();
@@ -149,6 +168,7 @@ async function checkAuthStatus() {
     // Start background sync every 10 seconds for real-time updates without flickering
     if (state.syncInterval) clearInterval(state.syncInterval);
     state.syncInterval = setInterval(() => {
+        checkAndAutoFlipCalendar();
         fetchTodos(false); // fetch silently without resetting UI state
         fetchEvents(false);
     }, 10000);
@@ -501,6 +521,21 @@ function renderMiniCalendar() {
         
         monthYearLabel.textContent = `${year}年${month + 1}月`;
         
+        // Show/hide '今日' button if browsing another month or date
+        const todayBtn = document.getElementById("btn-calendar-today");
+        if (todayBtn) {
+            const isTodayAndCurrentMonth = (
+                year === today.getFullYear() &&
+                month === today.getMonth() &&
+                state.selectedDate.toDateString() === today.toDateString()
+            );
+            if (!isTodayAndCurrentMonth) {
+                todayBtn.classList.remove("hidden");
+            } else {
+                todayBtn.classList.add("hidden");
+            }
+        }
+        
         // First day of month
         const firstDay = new Date(year, month, 1).getDay();
         // Total days in month
@@ -592,6 +627,8 @@ function renderMiniCalendar() {
             
             dayDiv.onclick = (e) => {
                 state.selectedDate = thisDate;
+                state.manualDateOverride = (thisDate.toDateString() !== new Date().toDateString());
+                state.lastManualActionTime = Date.now();
                 renderMiniCalendar();
                 renderEvents();
             };
@@ -639,8 +676,74 @@ function renderMiniCalendar() {
 }
 
 function changeMonth(direction) {
+    state.currentCalendarMonth.setDate(1);
     state.currentCalendarMonth.setMonth(state.currentCalendarMonth.getMonth() + direction);
+    state.manualMonthOverride = true;
+    state.lastManualActionTime = Date.now();
     renderMiniCalendar();
+}
+
+function goToToday() {
+    const now = new Date();
+    state.currentCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    state.selectedDate = new Date();
+    state.manualMonthOverride = false;
+    state.manualDateOverride = false;
+    state.lastManualActionTime = 0;
+    renderMiniCalendar();
+    renderEvents();
+}
+
+function checkAndAutoFlipCalendar() {
+    const now = new Date();
+    const todayDateString = now.toDateString();
+    const currentRealMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+    const displayedMonthKey = `${state.currentCalendarMonth.getFullYear()}-${state.currentCalendarMonth.getMonth()}`;
+
+    // 1. Midnight rollover: A new real-world day or month has arrived (e.g. 10/31 -> 11/1 00:00:00)
+    if (todayDateString !== state.lastLiveDateString) {
+        state.lastLiveDateString = todayDateString;
+        state.lastLiveMonthKey = currentRealMonthKey;
+
+        // Automatically flip to the new month and select today!
+        state.currentCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        state.selectedDate = new Date();
+        state.manualMonthOverride = false;
+        state.manualDateOverride = false;
+        state.lastManualActionTime = 0;
+
+        renderMiniCalendar();
+        renderEvents();
+        fetchEvents(false);
+        fetchTodos(false);
+        return;
+    }
+
+    // 2. If user hasn't explicitly clicked to another month, keep displayed month synced with current real month
+    if (!state.manualMonthOverride && displayedMonthKey !== currentRealMonthKey) {
+        state.currentCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        state.selectedDate = new Date();
+        renderMiniCalendar();
+        renderEvents();
+        return;
+    }
+
+    // 3. Inactivity auto-return:
+    // If the user manually flipped to another month (< or >) or clicked another date,
+    // automatically return to the current real month and today after 3 minutes of no interaction
+    if (state.manualMonthOverride || state.manualDateOverride || displayedMonthKey !== currentRealMonthKey) {
+        const INACTIVITY_TIMEOUT_MS = 180000; // 3 minutes
+        if (state.lastManualActionTime > 0 && (Date.now() - state.lastManualActionTime >= INACTIVITY_TIMEOUT_MS)) {
+            state.currentCalendarMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            state.selectedDate = new Date();
+            state.manualMonthOverride = false;
+            state.manualDateOverride = false;
+            state.lastManualActionTime = 0;
+
+            renderMiniCalendar();
+            renderEvents();
+        }
+    }
 }
 
 function hasEventsOnDay(date) {
